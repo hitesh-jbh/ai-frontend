@@ -4,21 +4,21 @@ import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../../store/auth-store";
 
-const TabsLayout = () => {
+const AuthLayout = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  if (!isAuthenticated) {
-    return <Redirect href="/login" />;
+  if (isAuthenticated) {
+    return <Redirect href="/home" />;
   }
 
   return (
-    <SafeAreaView className="flex-1">
-      <View className="flex-1">
-        <Text>TabsLayout</Text>
+    <SafeAreaView>
+      <View>
+        <Text>AuthLayout</Text>
         <Slot />
       </View>
     </SafeAreaView>
   );
 };
 
-export default TabsLayout;
+export default AuthLayout;

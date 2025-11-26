@@ -44,6 +44,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiUrl": "https://r2zjcv4s-8080.inc1.devtunnels.ms/api"
     }
   }
 }

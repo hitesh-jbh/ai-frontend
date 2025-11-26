@@ -1,24 +1,25 @@
 import { Redirect, Slot } from "expo-router";
-import React from "react";
-import { Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useEffect } from "react";
 import { useAuthStore } from "../../store/auth-store";
 
 const AuthLayout = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const initialize = useAuthStore((state) => state.initialize);
 
-  if (isAuthenticated) {
-    return <Redirect href="/home" />;
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (isLoading) {
+    return null; // Or a loading spinner
   }
 
-  return (
-    <SafeAreaView>
-      <View>
-        <Text>AuthLayout</Text>
-        <Slot />
-      </View>
-    </SafeAreaView>
-  );
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)/home" />;
+  }
+
+  return <Slot />;
 };
 
 export default AuthLayout;

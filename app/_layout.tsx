@@ -1,9 +1,11 @@
 import { useFonts } from "expo-font";
 import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ReactQueryProvider } from "../lib/react-query";
 import "./globals.css";
+import { StatusBar } from "react-native";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -23,9 +25,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ReactQueryProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </ReactQueryProvider>
+      <KeyboardProvider>
+        <ReactQueryProvider>
+          <SafeAreaView className="flex-1 bg-white">
+            <StatusBar backgroundColor={"#fff"} barStyle={"dark-content"} />
+            <Stack screenOptions={{ headerShown: false }} />
+          </SafeAreaView>
+        </ReactQueryProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

@@ -47,6 +47,19 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: "Leaderboard",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "trophy" : "trophy-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="vaults"
         options={{
           title: "Vaults",
@@ -61,12 +74,6 @@ const TabsLayout = () => {
       />
       <Tabs.Screen
         name="search"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
         options={{
           href: null, // Hide from tab bar
         }}
@@ -95,18 +102,18 @@ const TabsLayout = () => {
           href: null, // Hide from tab bar
         }}
       />
-        <Tabs.Screen
-          name="edit-vault"
-          options={{
-            href: null, // Hide from tab bar
-          }}
-        />
-        <Tabs.Screen
-          name="view-resource"
-          options={{
-            href: null, // Hide from tab bar
-          }}
-        />
+      <Tabs.Screen
+        name="edit-vault"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="view-resource"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
       <Tabs.Screen
         name="rewards"
         options={{

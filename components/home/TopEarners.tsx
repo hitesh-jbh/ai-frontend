@@ -2,7 +2,9 @@ import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 import { LeaderboardEntry } from "../../services/leaderboard.service";
+import { normalizeImageUrl } from "../../utils/imageUrl";
 
 interface TopEarnersProps {
   earners: LeaderboardEntry[];
@@ -10,12 +12,15 @@ interface TopEarnersProps {
 }
 
 export const TopEarners: React.FC<TopEarnersProps> = ({
-  earners,
+  earners = [],
   isLoading = false,
 }) => {
   const handleLeaderboardsPress = () => {
     router.push("/(tabs)/leaderboard");
   };
+
+  // Ensure earners is always an array
+  const safeEarners = Array.isArray(earners) ? earners : [];
 
   return (
     <View className="bg-white rounded-lg p-4 mb-6">
@@ -44,7 +49,7 @@ export const TopEarners: React.FC<TopEarnersProps> = ({
             Loading...
           </Text>
         </View>
-      ) : earners.length === 0 ? (
+      ) : safeEarners.length === 0 ? (
         <View className="py-8 items-center">
           <Text className="text-gray-500 text-sm font-outfit-regular">
             No earners yet
@@ -52,32 +57,48 @@ export const TopEarners: React.FC<TopEarnersProps> = ({
         </View>
       ) : (
         <View className="gap-3">
-          {earners.map((earner, index) => (
-            <View
-              key={earner.userId}
-              className="flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="w-10 h-10 bg-gray-200 rounded-full items-center justify-center mr-3">
-                  <Ionicons name="person" size={20} color="#6B7280" />
+          {safeEarners.map((earner, index) => {
+            const [imageError, setImageError] = React.useState(false);
+            const normalizedProfilePicture = earner.profilePicture
+              ? normalizeImageUrl(earner.profilePicture)
+              : null;
+
+            return (
+              <View
+                key={earner.userId}
+                className="flex-row items-center justify-between bg-gray-100 rounded-2xl p-4"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="w-10 h-10 bg-gray-200 rounded-full items-center justify-center mr-3 overflow-hidden">
+                    {normalizedProfilePicture && !imageError ? (
+                      <Image
+                        source={{ uri: normalizedProfilePicture }}
+                        style={{ width: 40, height: 40, borderRadius: 20 }}
+                        contentFit="cover"
+                        transition={200}
+                        onError={() => setImageError(true)}
+                      />
+                    ) : (
+                      <Ionicons name="person" size={20} color="#6B7280" />
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-gray-900 text-sm font-outfit-semi-bold">
+                      {earner.userName} #{earner.rank}
+                    </Text>
+                    <Text className="text-gray-600 text-xs font-outfit-regular">
+                      Content Creator
+                    </Text>
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-gray-900 text-sm font-outfit-semi-bold">
-                    {earner.userName} #{earner.rank}
-                  </Text>
-                  <Text className="text-gray-600 text-xs font-outfit-regular">
-                    Content Creator
-                  </Text>
-                </View>
+                <Text className="text-gray-900 text-sm font-outfit-semi-bold">
+                  {earner.score} Coins
+                </Text>
               </View>
-              <Text className="text-gray-900 text-sm font-outfit-semi-bold">
-                {earner.score} Coins
-              </Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
     </View>
   );
 };
-

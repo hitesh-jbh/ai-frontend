@@ -5,6 +5,7 @@ export interface LeaderboardEntry {
   userId: string;
   userName: string;
   score: number;
+  profilePicture?: string | null;
 }
 
 export interface ApiResponse<T> {
@@ -13,17 +14,33 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  total: number;
+}
+
+export interface UserRankResponse {
+  entry: LeaderboardEntry | null;
+  totalUsers: number;
+}
+
 export const createLeaderboardService = (axiosInstance: AxiosInstance) => ({
-  async getTopUsers(limit: number = 10): Promise<LeaderboardEntry[]> {
-    const response = await axiosInstance.get<ApiResponse<LeaderboardEntry[]>>(
-      `/leaderboard/top?limit=${limit}`
+  async getTopUsers(
+    limit: number = 20,
+    offset: number = 0,
+    period: "all" | "daily" | "weekly" | "monthly" = "all"
+  ): Promise<LeaderboardResponse> {
+    const response = await axiosInstance.get<ApiResponse<LeaderboardResponse>>(
+      `/leaderboard/top?limit=${limit}&offset=${offset}&period=${period}`
     );
     return response.data.data;
   },
 
-  async getUserRank(): Promise<LeaderboardEntry | null> {
-    const response = await axiosInstance.get<ApiResponse<LeaderboardEntry>>(
-      "/leaderboard/rank"
+  async getUserRank(
+    period: "all" | "daily" | "weekly" | "monthly" = "all"
+  ): Promise<UserRankResponse> {
+    const response = await axiosInstance.get<ApiResponse<UserRankResponse>>(
+      `/leaderboard/rank?period=${period}`
     );
     return response.data.data;
   },

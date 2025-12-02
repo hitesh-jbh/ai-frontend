@@ -40,10 +40,12 @@ export default function Home() {
     }
   }, [normalizedProfilePicture]);
 
-  const { data: topEarners, isLoading: isLoadingEarners } = useQuery({
+  const { data: topEarnersData, isLoading: isLoadingEarners } = useQuery({
     queryKey: ["topEarners"],
-    queryFn: () => leaderboard.getTopUsers(10),
+    queryFn: () => leaderboard.getTopUsers(10, 0, "all"),
   });
+
+  const topEarners = topEarnersData?.entries || [];
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -118,6 +120,8 @@ export default function Home() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSearch={handleSearch}
+            showSuggestions={true}
+            debounceMs={300}
           />
         </View>
       </View>
@@ -129,9 +133,10 @@ export default function Home() {
       >
         {/* Trending Banner */}
         <TrendingBanner
+          trendingText=""
           onCreateVault={() => router.push("/(tabs)/vaults")}
           onStartEarning={() => {}}
-          onTutorials={() => {}}
+          onTutorials={() => router.push("/(tabs)/search")}
         />
 
         {/* Statistics */}
@@ -143,15 +148,7 @@ export default function Home() {
         </View>
 
         {/* Analytics */}
-        <AnalyticsChart
-          period="All Time"
-          data={[
-            { name: "Joy", value: 9 },
-            { name: "Govind", value: 9 },
-            { name: "Joyboy", value: 6 },
-            { name: "aman", value: 3 },
-          ]}
-        />
+        <AnalyticsChart period="all" />
 
         {/* Top Earners */}
         <TopEarners earners={topEarners || []} isLoading={isLoadingEarners} />

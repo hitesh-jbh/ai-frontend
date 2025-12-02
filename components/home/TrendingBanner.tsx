@@ -24,12 +24,13 @@ export const TrendingBanner: React.FC<TrendingBannerProps> = ({
         end={{ x: 0, y: 1 }}
         style={styles.gradient}
       >
-        <View className="flex-row items-center justify-center mb-4">
-          <Ionicons name="flame" size={16} color="#F97316" />
-          <Text className="text-white text-xs font-outfit-medium ml-1">
-            {trendingText}
-          </Text>
-        </View>
+        {trendingText && (
+          <View className="flex-row items-center justify-center mb-4">
+            <Text className="text-white text-xs font-outfit-medium ml-1">
+              {trendingText}
+            </Text>
+          </View>
+        )}
 
         <Text className="text-white text-2xl font-outfit-bold mb-2 text-center">
           Turning Knowledge Into

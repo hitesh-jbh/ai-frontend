@@ -5,7 +5,9 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ReactQueryProvider } from "../lib/react-query";
 import "./globals.css";
-import { StatusBar } from "react-native";
+import { Platform, StatusBar } from "react-native";
+import { useAuthStore } from "../store/auth-store";
+import * as NavigationBar from "expo-navigation-bar";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -18,16 +20,32 @@ export default function RootLayout() {
     "Outfit-ExtraBold": require("../assets/fonts/outfit/Outfit-ExtraBold.ttf"),
   });
 
+  const initialize = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      NavigationBar.setBackgroundColorAsync("#ffffff");
+      NavigationBar.setButtonStyleAsync("light");
+    }
+  }, []);
+
   useEffect(() => {
     if (fontError) throw fontError;
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
 
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
         <ReactQueryProvider>
-          <SafeAreaView className="flex-1 bg-white">
+          <SafeAreaView
+            className="flex-1 bg-white"
+            edges={["bottom", "left", "right"]}
+          >
             <StatusBar backgroundColor={"#fff"} barStyle={"dark-content"} />
             <Stack screenOptions={{ headerShown: false }} />
           </SafeAreaView>

@@ -3,11 +3,16 @@ import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 
 export default function Quizzes() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Quizzes" showBackButton />
+      <ScreenHeader
+        title="Quizzes"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/profile")}
+      />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">

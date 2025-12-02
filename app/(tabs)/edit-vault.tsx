@@ -87,7 +87,11 @@ export default function EditVault() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Edit Vault" showBackButton />
+      <ScreenHeader
+        title="Edit Vault"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/vaults")}
+      />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">

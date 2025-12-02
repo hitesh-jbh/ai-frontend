@@ -54,7 +54,11 @@ export default function CreateVault() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Create Vault" showBackButton />
+      <ScreenHeader
+        title="Create Vault"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/vaults")}
+      />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">

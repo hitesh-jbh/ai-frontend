@@ -23,7 +23,10 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   };
 
   return (
-    <View className="flex-row items-center px-6 min-h-[80px] justify-center">
+    <View
+      style={{ minHeight: 100, paddingHorizontal: 24 }}
+      className="flex-row items-center justify-center"
+    >
       {showBackButton && (
         <TouchableOpacity
           onPress={handleBackPress}

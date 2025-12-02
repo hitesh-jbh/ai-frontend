@@ -115,6 +115,12 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
+        name="view-vault"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
         name="rewards"
         options={{
           href: null, // Hide from tab bar

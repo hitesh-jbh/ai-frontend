@@ -57,11 +57,11 @@ export default function Home() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <View
         className="px-6 bg-white"
         style={{
-          minHeight: 175,
+          minHeight: 180,
           justifyContent: "flex-end",
         }}
       >
@@ -148,7 +148,7 @@ export default function Home() {
         </View>
 
         {/* Analytics */}
-        <AnalyticsChart period="all" />
+        <AnalyticsChart period="weekly" />
 
         {/* Top Earners */}
         <TopEarners earners={topEarners || []} isLoading={isLoadingEarners} />

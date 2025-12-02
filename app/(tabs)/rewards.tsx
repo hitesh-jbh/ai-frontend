@@ -24,7 +24,11 @@ export default function Rewards() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Rewards" showBackButton />
+      <ScreenHeader
+        title="Rewards"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/profile")}
+      />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">

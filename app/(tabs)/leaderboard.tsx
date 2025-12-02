@@ -15,6 +15,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { normalizeImageUrl } from "../../utils/imageUrl";
+import { router } from "expo-router";
 
 type Period = "all" | "daily" | "weekly" | "monthly";
 
@@ -230,7 +231,11 @@ export default function Leaderboard() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Leaderboard" showBackButton />
+      <ScreenHeader
+        title="Leaderboard"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/home")}
+      />
 
       <FlatList
         data={remainingEntries}

@@ -83,7 +83,11 @@ export default function Profile() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Options" showBackButton />
+      <ScreenHeader
+        title="Options"
+        showBackButton
+        onBackPress={() => router.push("/(tabs)/vaults")}
+      />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6">
@@ -137,7 +141,7 @@ export default function Profile() {
           {/* Logout Button */}
           <TouchableOpacity
             onPress={handleLogout}
-            className="bg-red-500 rounded-lg py-4 px-4 flex-row items-center justify-center mb-6"
+            className="bg-red-500 rounded-3xl py-4 px-4 flex-row items-center justify-center mb-6"
             activeOpacity={0.7}
           >
             <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />

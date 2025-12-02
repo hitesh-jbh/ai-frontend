@@ -3,13 +3,14 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { SearchBar } from "../../components/ui/SearchBar";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { Resource } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,23 +39,15 @@ export default function Search() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4 pb-4 border-b border-gray-200">
-        <View className="flex-row items-center mb-4">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-3"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <View className="flex-1">
-            <SearchBar
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSearch={handleSearch}
-              placeholder="Search for knowledge vault.."
-            />
-          </View>
+      <ScreenHeader title="Search" showBackButton />
+      <View className="px-6 pb-4 border-b border-gray-200">
+        <View className="mt-2">
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSearch={handleSearch}
+            placeholder="Search for knowledge vault.."
+          />
         </View>
       </View>
 
@@ -110,6 +103,7 @@ export default function Search() {
                     key={resource.id}
                     className="bg-white border border-gray-200 rounded-lg p-4"
                     activeOpacity={0.7}
+                    onPress={() => router.push(`/(tabs)/view-resource?id=${resource.id}`)}
                   >
                     <View className="flex-row items-start mb-2">
                       <View className="bg-blue-100 rounded-lg p-2 mr-3">

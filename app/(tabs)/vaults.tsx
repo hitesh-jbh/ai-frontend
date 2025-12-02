@@ -2,208 +2,147 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
-  Image,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  useQuery,
+} from "@tanstack/react-query";
 import { useServices } from "../../hooks/useServices";
 import { Vault } from "../../services/vault.service";
 import { Resource } from "../../services/resource.service";
 import { useAuthStore } from "../../store/auth-store";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
+import { normalizeImageUrl } from "../../utils/imageUrl";
 
-type TabType = "all" | "recent" | "videos" | "vaults";
-
-interface TabButtonProps {
-  label: string;
-  isActive: boolean;
+interface VaultCardProps {
+  vault: Vault;
   onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  resourceCount?: number;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ label, isActive, onPress }) => {
+const VaultCard: React.FC<VaultCardProps> = ({
+  vault,
+  onPress,
+  onEdit,
+  onDelete,
+  resourceCount = 0,
+}) => {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`px-4 py-2 rounded-lg ${
-        isActive ? "bg-blue-500" : "bg-transparent"
-      }`}
+      className="bg-white rounded-lg mb-4 p-4 shadow-sm border border-gray-100"
       activeOpacity={0.7}
     >
-      <Text
-        className={`text-sm font-outfit-semi-bold ${
-          isActive ? "text-white" : "text-gray-700"
-        }`}
-      >
-        {label}
-      </Text>
+      <View className="flex-row items-start justify-between mb-3">
+        <View className="flex-1 mr-2">
+          <View className="flex-row items-center mb-1">
+            <Ionicons name="folder" size={20} color="#3B82F6" />
+            <Text
+              className="text-gray-900 text-lg font-outfit-bold flex-1 ml-2"
+              numberOfLines={1}
+            >
+              {vault.title}
+            </Text>
+          </View>
+          {vault.description && (
+            <Text
+              className="text-gray-600 text-sm font-outfit-regular mt-1"
+              numberOfLines={2}
+            >
+              {vault.description}
+            </Text>
+          )}
+        </View>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="p-2"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="pencil-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-2"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-100">
+        <View className="flex-row items-center">
+          <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+          <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
+            {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
+          </Text>
+        </View>
+        <Text className="text-gray-500 text-xs font-outfit-regular">
+          {new Date(vault.createdAt).toLocaleDateString()}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 };
 
-interface ResourceCardProps {
-  resource: Resource;
-  onEdit?: () => void;
-  onDelete?: () => void;
+interface VaultDetailViewProps {
+  vault: Vault;
+  onBack: () => void;
 }
 
-const ResourceCard: React.FC<ResourceCardProps> = ({
-  resource,
-  onEdit,
-  onDelete,
-}) => {
-  const getTypeIcon = () => {
-    switch (resource.type) {
-      case "pdf":
-        return "document-text";
-      case "video":
-        return "videocam";
-      case "note":
-        return "document";
-      case "link":
-        return "link";
-      default:
-        return "document";
-    }
-  };
-
-  return (
-    <View className="bg-white rounded-lg mb-4 overflow-hidden shadow-sm">
-      <View className="relative">
-        {resource.fileUrl ? (
-          <Image
-            source={{ uri: resource.fileUrl }}
-            className="w-full h-48"
-            resizeMode="cover"
-          />
-        ) : (
-          <View className="w-full h-48 bg-gray-200 items-center justify-center">
-            <Ionicons name={getTypeIcon() as any} size={48} color="#9CA3AF" />
-          </View>
-        )}
-        <View className="absolute top-2 left-2 bg-blue-500 rounded px-2 py-1">
-          <Text className="text-white text-xs font-outfit-semi-bold uppercase">
-            {resource.type}
-          </Text>
-        </View>
-      </View>
-      <View className="p-4">
-        <Text className="text-gray-900 text-base font-outfit-semi-bold mb-1">
-          {resource.title}
-        </Text>
-        {resource.tags && resource.tags.length > 0 && (
-          <View className="flex-row flex-wrap gap-2 mb-3">
-            {resource.tags.slice(0, 3).map((tag, index) => (
-              <View key={index} className="bg-gray-100 rounded-full px-2 py-1">
-                <Text className="text-gray-600 text-xs font-outfit-regular">
-                  {tag}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-4">
-            <View className="flex-row items-center">
-              <Ionicons name="thumbs-up-outline" size={16} color="#6B7280" />
-              <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
-                0
-              </Text>
-            </View>
-            <View className="flex-row items-center">
-              <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
-              <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
-                0
-              </Text>
-            </View>
-            <View className="flex-row items-center">
-              <Ionicons name="share-outline" size={16} color="#6B7280" />
-              <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
-                0
-              </Text>
-            </View>
-          </View>
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={onEdit} activeOpacity={0.7}>
-              <Ionicons name="pencil-outline" size={20} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onDelete} activeOpacity={0.7}>
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-export default function Vaults() {
-  const [selectedTab, setSelectedTab] = useState<TabType>("all");
-  const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
-  const { user, setUser } = useAuthStore();
+const VaultDetailView: React.FC<VaultDetailViewProps> = ({ vault, onBack }) => {
+  const { resource } = useServices();
   const queryClient = useQueryClient();
-  const { vault, resource, profile } = useServices();
 
-  // Fetch latest profile data
-  const { data: profileData } = useQuery({
-    queryKey: ["profile"],
-    queryFn: () => profile.getProfile(),
-    enabled: !!user,
-  });
-
-  // Update user in store when profile data is fetched (only if data changed)
-  useEffect(() => {
-    if (profileData && user) {
-      const hasChanges =
-        user.bio !== profileData.bio ||
-        user.profilePicture !== profileData.profilePicture ||
-        user.name !== profileData.name;
-
-      if (hasChanges) {
-        setUser({ ...user, ...profileData });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    profileData?.id,
-    profileData?.bio,
-    profileData?.profilePicture,
-    profileData?.name,
-  ]);
-
-  const displayUser = profileData || user;
-
-  const { data: vaults, isLoading: isLoadingVaults } = useQuery({
-    queryKey: ["vaults"],
-    queryFn: () => vault.getUserVaults(),
-  });
-
-  // Get resources from all vaults or selected vault
-  const { data: allResources, isLoading: isLoadingResources } = useQuery({
-    queryKey: ["allResources", vaults],
-    queryFn: async () => {
-      if (!vaults || vaults.length === 0) return [];
-      const allRes: Resource[] = [];
-      for (const vaultItem of vaults) {
-        try {
-          const res = await resource.getVaultResources(vaultItem.id);
-          allRes.push(...res);
-        } catch (error) {
-          // Skip vaults with errors
-        }
-      }
-      return allRes;
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useInfiniteQuery({
+    queryKey: ["vaultResources", vault.id],
+    queryFn: async ({ pageParam = 0 }) => {
+      const result = await resource.getVaultResources(vault.id, 20, pageParam);
+      return {
+        resources: result.resources,
+        nextOffset: result.resources.length === 20 ? pageParam + 20 : undefined,
+        hasMore:
+          result?.resources?.length === 20 && pageParam + 20 < result.total,
+      };
     },
-    enabled: !!vaults && vaults.length > 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    initialPageParam: 0,
   });
+
+  const resources = data?.pages.flatMap((page) => page.resources) || [];
 
   const deleteResourceMutation = useMutation({
     mutationFn: (id: string) => resource.deleteResource(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["resources"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResources", vault.id] });
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
       Alert.alert("Success", "Resource deleted successfully");
     },
     onError: () => {
@@ -226,65 +165,371 @@ export default function Vaults() {
     );
   };
 
-  const filteredResources = allResources?.filter((resource) => {
-    if (selectedTab === "all") return true;
-    if (selectedTab === "videos") return resource.type === "video";
-    if (selectedTab === "vaults") return resource.type !== "video";
-    if (selectedTab === "recent") {
-      // Show recent resources (last 7 days)
-      const resourceDate = new Date(resource.createdAt);
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return resourceDate >= weekAgo;
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "pdf":
+        return "document-text";
+      case "video":
+        return "videocam";
+      case "note":
+        return "document";
+      case "link":
+        return "link";
+      default:
+        return "document";
     }
-    return true;
-  });
+  };
 
-  const tabs: { key: TabType; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "recent", label: "Recent" },
-    { key: "videos", label: "Videos" },
-    { key: "vaults", label: "Vaults" },
-  ];
+  const renderResource = ({ item }: { item: Resource }) => (
+    <TouchableOpacity
+      className="bg-white rounded-lg mb-4 p-4 shadow-sm border border-gray-100"
+      activeOpacity={0.7}
+      onPress={() => router.push(`/(tabs)/view-resource?id=${item.id}`)}
+    >
+      <View className="flex-row items-start">
+        {item.fileUrl ? (
+          <Image
+            source={{ uri: item.fileUrl }}
+            className="w-16 h-16 rounded-lg mr-3"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="w-16 h-16 bg-gray-200 rounded-lg mr-3 items-center justify-center">
+            <Ionicons
+              name={getTypeIcon(item.type) as any}
+              size={24}
+              color="#9CA3AF"
+            />
+          </View>
+        )}
+        <View className="flex-1">
+          <Text
+            className="text-gray-900 text-base font-outfit-semi-bold mb-1"
+            numberOfLines={2}
+          >
+            {item.title}
+          </Text>
+          <View className="flex-row items-center mb-2">
+            <View className="bg-blue-100 rounded px-2 py-1 mr-2">
+              <Text className="text-blue-700 text-xs font-outfit-semi-bold uppercase">
+                {item.type}
+              </Text>
+            </View>
+          </View>
+          {item?.tags && item?.tags?.length > 0 && (
+            <View className="flex-row flex-wrap gap-1 mb-2">
+              {item.tags.slice(0, 3).map((tag, index) => (
+                <View
+                  key={index}
+                  className="bg-gray-100 rounded-full px-2 py-1"
+                >
+                  <Text className="text-gray-600 text-xs font-outfit-regular">
+                    {tag}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push(`/(tabs)/edit-resource?id=${item.id}`);
+            }}
+            className="p-2"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="pencil-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteResource(item.id);
+            }}
+            className="p-2"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
+    <View className="flex-1">
+      <View className="px-6 pt-4 pb-4 bg-white border-b border-gray-100">
         <View className="flex-row items-center mb-4">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={onBack}
             className="mr-4"
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
           </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">Vault</Text>
+          <View className="flex-1">
+            <Text
+              className="text-gray-900 text-xl font-outfit-bold"
+              numberOfLines={1}
+            >
+              {vault.title}
+            </Text>
+            {vault.description && (
+              <Text
+                className="text-gray-600 text-sm font-outfit-regular mt-1"
+                numberOfLines={1}
+              >
+                {vault.description}
+              </Text>
+            )}
+          </View>
         </View>
+        <TouchableOpacity
+          onPress={() =>
+            router.push(`/(tabs)/add-resource?vaultId=${vault.id}`)
+          }
+          className="bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+          <Text className="text-white text-sm font-outfit-semi-bold ml-2">
+            Add Resource
+          </Text>
+        </TouchableOpacity>
+      </View>
 
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
+            Loading resources...
+          </Text>
+        </View>
+      ) : resources?.length === 0 ? (
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="document-outline" size={64} color="#9CA3AF" />
+          <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
+            No resources yet
+          </Text>
+          <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+            Add your first resource to this vault
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={resources}
+          renderItem={renderResource}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 24, paddingTop: 16 }}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={() =>
+            isFetchingNextPage ? (
+              <View className="py-4 items-center">
+                <ActivityIndicator size="small" color="#3B82F6" />
+              </View>
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+          }
+        />
+      )}
+    </View>
+  );
+};
+
+export default function Vaults() {
+  const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
+  const [profileImageError, setProfileImageError] = useState(false);
+  const { user, setUser } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { vault, resource, profile } = useServices();
+
+  // Fetch latest profile data
+  const { data: profileData } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => profile.getProfile(),
+    enabled: !!user,
+  });
+
+  // Update user in store when profile data is fetched
+  useEffect(() => {
+    if (profileData && user) {
+      const hasChanges =
+        user.bio !== profileData.bio ||
+        user.profilePicture !== profileData.profilePicture ||
+        user.name !== profileData.name;
+
+      if (hasChanges) {
+        setUser({ ...user, ...profileData });
+      }
+    }
+  }, [
+    profileData?.id,
+    profileData?.bio,
+    profileData?.profilePicture,
+    profileData?.name,
+  ]);
+
+  const displayUser = profileData || user;
+  const normalizedProfilePicture = normalizeImageUrl(
+    displayUser?.profilePicture
+  );
+
+  // Reset error state when profile picture changes
+  useEffect(() => {
+    if (normalizedProfilePicture) {
+      setProfileImageError(false);
+    }
+  }, [normalizedProfilePicture]);
+
+  // Infinite query for vaults
+  const {
+    data: vaultsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingVaults,
+    refetch: refetchVaults,
+    isRefetching: isRefetchingVaults,
+  } = useInfiniteQuery({
+    queryKey: ["vaults"],
+    queryFn: async ({ pageParam = 0 }) => {
+      const result = await vault.getUserVaults(20, pageParam);
+      return {
+        vaults: result.vaults,
+        nextOffset: result.vaults?.length === 20 ? pageParam + 20 : undefined,
+        hasMore: result.vaults?.length === 20 && pageParam + 20 < result.total,
+      };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    initialPageParam: 0,
+  });
+
+  const vaults = vaultsData?.pages.flatMap((page) => page.vaults) || [];
+
+  // Get resource counts for each vault (optimized - only fetch total count)
+  const { data: resourceCounts } = useQuery({
+    queryKey: ["vaultResourceCounts", vaults.map((v) => v.id).join(",")],
+    queryFn: async () => {
+      const counts: Record<string, number> = {};
+      // Fetch with limit=1 to get total count efficiently
+      await Promise.all(
+        vaults.map(async (vaultItem) => {
+          try {
+            const result = await resource.getVaultResources(vaultItem.id, 1, 0);
+            counts[vaultItem.id] = result.total;
+          } catch {
+            counts[vaultItem.id] = 0;
+          }
+        })
+      );
+      return counts;
+    },
+    enabled: vaults?.length > 0,
+  });
+
+  const deleteVaultMutation = useMutation({
+    mutationFn: (id: string) => vault.deleteVault(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
+      Alert.alert(
+        "Success",
+        "Vault and all its resources deleted successfully"
+      );
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to delete vault");
+    },
+  });
+
+  const handleDeleteVault = (vaultId: string, vaultTitle: string) => {
+    Alert.alert(
+      "Delete Vault",
+      `Are you sure you want to delete "${vaultTitle}"? This will permanently delete the vault and ALL its resources. This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteVaultMutation.mutate(vaultId),
+        },
+      ]
+    );
+  };
+
+  const handleEditVault = (vaultId: string) => {
+    router.push(`/(tabs)/edit-vault?id=${vaultId}`);
+  };
+
+  if (selectedVault) {
+    return (
+      <VaultDetailView
+        vault={selectedVault}
+        onBack={() => setSelectedVault(null)}
+      />
+    );
+  }
+
+  const renderVault = ({ item }: { item: Vault }) => (
+    <VaultCard
+      vault={item}
+      resourceCount={resourceCounts?.[item.id] || 0}
+      onPress={() => setSelectedVault(item)}
+      onEdit={() => handleEditVault(item.id)}
+      onDelete={() => handleDeleteVault(item.id, item.title)}
+    />
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+      <ScreenHeader showBackButton title="My Vaults" />
+
+      <View className="px-6">
         {/* Profile Section */}
         <View className="items-center mb-6">
-          {displayUser?.profilePicture ? (
-            <View className="w-20 h-20 rounded-full overflow-hidden mb-2">
+          <View className="w-20 h-20 bg-gray-200 rounded-full items-center justify-center mb-2 overflow-hidden">
+            {normalizedProfilePicture && !profileImageError ? (
               <Image
-                source={{ uri: displayUser.profilePicture }}
-                className="w-full h-full"
-                resizeMode="cover"
+                key={normalizedProfilePicture}
+                source={{ uri: normalizedProfilePicture }}
+                style={{ width: 80, height: 80 }}
+                contentFit="cover"
+                transition={200}
+                onError={(e) => {
+                  console.error(
+                    "Failed to load profile picture in Vaults:",
+                    normalizedProfilePicture,
+                    e
+                  );
+                  setProfileImageError(true);
+                }}
+                onLoad={() => {
+                  console.log(
+                    "Profile picture loaded in Vaults:",
+                    normalizedProfilePicture
+                  );
+                  setProfileImageError(false);
+                }}
               />
-            </View>
-          ) : (
-            <View className="w-20 h-20 bg-gray-200 rounded-full items-center justify-center mb-2">
+            ) : displayUser?.name ? (
+              <Text className="text-gray-600 font-outfit-semi-bold text-2xl">
+                {displayUser.name.charAt(0).toUpperCase()}
+              </Text>
+            ) : (
               <Ionicons name="person" size={32} color="#6B7280" />
-            </View>
-          )}
+            )}
+          </View>
           <Text className="text-gray-900 text-xl font-outfit-bold uppercase mb-1">
             {displayUser?.name || "User"}
           </Text>
-          <View className="flex-row items-center">
-            <Ionicons name="people-outline" size={14} color="#6B7280" />
-            <Text className="text-gray-600 text-sm font-outfit-regular ml-1">
-              0 Followers
-            </Text>
-          </View>
           {displayUser?.bio && (
             <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
               {displayUser.bio}
@@ -296,15 +541,7 @@ export default function Vaults() {
         <View className="flex-row gap-4 mb-6">
           <View className="flex-1 bg-white rounded-lg p-4 items-center border border-gray-100">
             <Text className="text-gray-900 text-2xl font-outfit-bold mb-1">
-              3
-            </Text>
-            <Text className="text-gray-600 text-xs font-outfit-regular">
-              Videos
-            </Text>
-          </View>
-          <View className="flex-1 bg-white rounded-lg p-4 items-center border border-gray-100">
-            <Text className="text-gray-900 text-2xl font-outfit-bold mb-1">
-              {vaults?.length || 0}
+              {vaults?.length}
             </Text>
             <Text className="text-gray-600 text-xs font-outfit-regular">
               Vaults
@@ -312,92 +549,71 @@ export default function Vaults() {
           </View>
           <View className="flex-1 bg-white rounded-lg p-4 items-center border border-gray-100">
             <Text className="text-gray-900 text-2xl font-outfit-bold mb-1">
-              0
+              {Object.values(resourceCounts || {}).reduce((a, b) => a + b, 0)}
             </Text>
             <Text className="text-gray-600 text-xs font-outfit-regular">
-              Followers
+              Resources
             </Text>
           </View>
         </View>
 
-        {/* Tabs */}
-        <View className="flex-row gap-2 mb-4">
-          {tabs.map((tab) => (
-            <TabButton
-              key={tab.key}
-              label={tab.label}
-              isActive={selectedTab === tab.key}
-              onPress={() => setSelectedTab(tab.key)}
-            />
-          ))}
-        </View>
-
-        {/* Action Buttons */}
-        <View className="flex-row gap-3 mb-6">
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/create-vault")}
-            className="flex-1 bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text className="text-white text-sm font-outfit-semi-bold ml-2">
-              Create Vault
-            </Text>
-          </TouchableOpacity>
-          {vaults && vaults.length > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                if (vaults.length === 1) {
-                  router.push(`/(tabs)/add-resource?vaultId=${vaults[0].id}`);
-                } else {
-                  // Show vault selection modal or navigate to first vault
-                  router.push(`/(tabs)/add-resource?vaultId=${vaults[0].id}`);
-                }
-              }}
-              className="flex-1 bg-green-500 rounded-lg py-3 px-4 flex-row items-center justify-center"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-              <Text className="text-white text-sm font-outfit-semi-bold ml-2">
-                Add Resource
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* Action Button */}
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/create-vault")}
+          className="bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center mb-6"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Text className="text-white text-sm font-outfit-semi-bold ml-2">
+            Create Vault
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        {isLoadingResources ? (
-          <View className="py-8 items-center">
-            <Text className="text-gray-500 text-sm font-outfit-regular">
-              Loading resources...
-            </Text>
-          </View>
-        ) : filteredResources && filteredResources.length > 0 ? (
-          <View className="pb-6">
-            {filteredResources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                onEdit={() => {
-                  router.push(`/(tabs)/edit-resource?id=${resource.id}`);
-                }}
-                onDelete={() => handleDeleteResource(resource.id)}
-              />
-            ))}
-          </View>
-        ) : (
-          <View className="py-8 items-center">
-            <Ionicons name="folder-outline" size={48} color="#9CA3AF" />
-            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
-              No resources yet
-            </Text>
-            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-              Create a vault and add resources to get started
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      {isLoadingVaults ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
+            Loading vaults...
+          </Text>
+        </View>
+      ) : vaults?.length === 0 ? (
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="folder-outline" size={64} color="#9CA3AF" />
+          <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
+            No vaults yet
+          </Text>
+          <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+            Create your first vault to organize your resources
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={vaults}
+          renderItem={renderVault}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 24, paddingTop: 0 }}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={() =>
+            isFetchingNextPage ? (
+              <View className="py-4 items-center">
+                <ActivityIndicator size="small" color="#3B82F6" />
+              </View>
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetchingVaults}
+              onRefresh={refetchVaults}
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { LeaderboardEntry } from "../../services/leaderboard.service";
 import { useAuthStore } from "../../store/auth-store";
@@ -46,14 +47,25 @@ const TopContributorCard: React.FC<TopContributorCardProps> = ({
   rank,
 }) => {
   const isTopTwo = rank <= 2;
-  const badgeColor = rank === 1 ? "#F59E0B" : rank === 2 ? "#F59E0B" : "#F97316";
+  const badgeColor =
+    rank === 1 ? "#F59E0B" : rank === 2 ? "#F59E0B" : "#F97316";
 
   return (
     <View className="bg-white rounded-lg p-4 mb-4 items-center">
       {isTopTwo ? (
-        <Ionicons name="trophy" size={24} color="#F59E0B" style={{ marginBottom: 8 }} />
+        <Ionicons
+          name="trophy"
+          size={24}
+          color="#F59E0B"
+          style={{ marginBottom: 8 }}
+        />
       ) : (
-        <Ionicons name="medal" size={24} color="#F97316" style={{ marginBottom: 8 }} />
+        <Ionicons
+          name="medal"
+          size={24}
+          color="#F97316"
+          style={{ marginBottom: 8 }}
+        />
       )}
       <View className="w-20 h-20 bg-gray-200 rounded-full items-center justify-center mb-2 relative">
         <Ionicons name="person" size={32} color="#6B7280" />
@@ -109,20 +121,7 @@ export default function Leaderboard() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Leaderboard
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Leaderboard" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -220,4 +219,3 @@ export default function Leaderboard() {
     </SafeAreaView>
   );
 }
-

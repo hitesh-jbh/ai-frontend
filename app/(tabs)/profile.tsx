@@ -2,9 +2,10 @@ import React, { useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../store/auth-store";
 import { ProfilePictureUploader } from "../../components/ui/ProfilePictureUploader";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -32,12 +33,14 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress }) => {
 export default function Profile() {
   const { user, logout, setUser } = useAuthStore();
   const { profile } = useServices();
+  const queryClient = useQueryClient();
 
   // Fetch latest profile data
-  const { data: profileData } = useQuery({
+  const { data: profileData, refetch: refetchProfile } = useQuery({
     queryKey: ["profile"],
     queryFn: () => profile.getProfile(),
     enabled: !!user,
+    staleTime: 0, // Always fetch fresh data
   });
 
   // Update user in store when profile data is fetched (only if data changed)
@@ -62,26 +65,25 @@ export default function Profile() {
 
   const displayUser = profileData || user;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      // Clear all query cache
+      queryClient.clear();
+      // Logout and clear tokens
+      await logout();
+      // Navigate to login
+      router.replace("/(auth)/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Still clear cache and navigate even if logout API call fails
+      queryClient.clear();
+      router.replace("/(auth)/login");
+    }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Options
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Options" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6">
@@ -131,6 +133,18 @@ export default function Profile() {
               onPress={() => router.push("/(tabs)/ad-management")}
             />
           </View>
+
+          {/* Logout Button */}
+          <TouchableOpacity
+            onPress={handleLogout}
+            className="bg-red-500 rounded-lg py-4 px-4 flex-row items-center justify-center mb-6"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+            <Text className="text-white text-base font-outfit-semi-bold ml-2">
+              Logout
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

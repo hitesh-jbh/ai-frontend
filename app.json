@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "basic-native-setup",
-    "slug": "basic-native-setup",
+    "name": "Connect",
+    "slug": "connect-knowledge-vault",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

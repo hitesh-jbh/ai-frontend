@@ -14,32 +14,39 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-const addResourceSchema = z.object({
-  title: z.string().min(1, "Title is required").max(255),
-  type: z.enum(["pdf", "video", "note", "link"]),
-  fileUrl: z.string().url().optional().or(z.literal("")),
-  subject: z.string().max(100).optional(),
-  grade: z.string().max(50).optional(),
-  area: z.string().max(100).optional(),
-  language: z.string().max(50).optional(),
-  tags: z.string().optional(),
-}).refine(
-  (data) => {
-    if (data.type === "link") {
-      return data.fileUrl && data.fileUrl !== "" && z.string().url().safeParse(data.fileUrl).success;
+const addResourceSchema = z
+  .object({
+    title: z.string().min(1, "Title is required").max(255),
+    type: z.enum(["pdf", "video", "note", "link"]),
+    fileUrl: z.string().url().optional().or(z.literal("")),
+    subject: z.string().max(100).optional(),
+    grade: z.string().max(50).optional(),
+    area: z.string().max(100).optional(),
+    language: z.string().max(50).optional(),
+    tags: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.type === "link") {
+        return (
+          data.fileUrl &&
+          data.fileUrl !== "" &&
+          z.string().url().safeParse(data.fileUrl).success
+        );
+      }
+      return true;
+    },
+    {
+      message: "URL is required and must be valid for link type resources",
+      path: ["fileUrl"],
     }
-    return true;
-  },
-  {
-    message: "URL is required and must be valid for link type resources",
-    path: ["fileUrl"],
-  }
-);
+  );
 
 type AddResourceForm = z.infer<typeof addResourceSchema>;
 
@@ -49,7 +56,9 @@ export default function AddResource() {
   const { resource, vault } = useServices();
   const [fileUri, setFileUri] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedType, setSelectedType] = useState<"pdf" | "video" | "note" | "link">("note");
+  const [selectedType, setSelectedType] = useState<
+    "pdf" | "video" | "note" | "link"
+  >("note");
 
   const { data: vaultData } = useQuery({
     queryKey: ["vault", vaultId],
@@ -77,7 +86,7 @@ export default function AddResource() {
     try {
       if (resourceType === "video") {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaType.Videos,
+          mediaTypes: ["videos"],
           allowsEditing: true,
           quality: 0.8,
         });
@@ -88,7 +97,10 @@ export default function AddResource() {
       } else if (resourceType === "pdf" || resourceType === "note") {
         // For now, we'll use image picker for PDFs too
         // In production, use expo-document-picker
-        Alert.alert("Info", "File picker will be implemented with expo-document-picker");
+        Alert.alert(
+          "Info",
+          "File picker will be implemented with expo-document-picker"
+        );
       }
     } catch (error) {
       Alert.alert("Error", "Failed to pick file");
@@ -99,15 +111,8 @@ export default function AddResource() {
     mutationFn: async (data: AddResourceForm) => {
       let fileUrl = data.fileUrl;
 
-      // For file uploads, we'll create the resource first without fileUrl
-      // Then upload the file separately if needed
-      // Note: The upload endpoint requires resourceId, so we create first
-      if (fileUri && fileUri.startsWith("file://") && resourceType !== "link") {
-        // For now, we'll create without fileUrl and let user upload later
-        // Or we can skip file upload for initial creation
-        fileUrl = undefined;
-      }
-
+      // For file uploads, we need to create the resource first, then upload the file
+      // The upload endpoint requires resourceId, so we create first
       const createData: any = {
         vaultId: vaultId!,
         type: data.type,
@@ -125,11 +130,30 @@ export default function AddResource() {
           .filter((tag) => tag.length > 0);
       }
 
-      if (fileUrl) {
+      // For link type, fileUrl is required and should be provided
+      if (data.type === "link" && fileUrl) {
         createData.fileUrl = fileUrl;
       }
 
-      return resource.createResource(createData);
+      // Create resource first (without fileUrl for file uploads)
+      const createdResource = await resource.createResource(createData);
+
+      // If we have a local file to upload, upload it now
+      if (fileUri && fileUri.startsWith("file://") && data.type !== "link") {
+        try {
+          fileUrl = await resource.uploadFile(
+            fileUri,
+            data.type as "pdf" | "video" | "note",
+            vaultId!,
+            createdResource.id
+          );
+        } catch (error) {
+          // Continue even if file upload fails - resource is already created
+        }
+      }
+
+      // Return the created resource (fileUrl will be updated by the upload endpoint)
+      return createdResource;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["resources"] });
@@ -140,7 +164,9 @@ export default function AddResource() {
     },
     onError: (error: any) => {
       const errorMessage =
-        error?.response?.data?.message || error?.message || "Failed to create resource";
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to create resource";
       Alert.alert("Error", errorMessage);
     },
   });
@@ -162,25 +188,14 @@ export default function AddResource() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Add Resource
-          </Text>
-        </View>
-        {vaultData && (
-          <Text className="text-gray-600 text-sm font-outfit-regular mb-4">
+      <ScreenHeader title="Add Resource" showBackButton />
+      {vaultData && (
+        <View className="px-6 pb-4">
+          <Text className="text-gray-600 text-sm font-outfit-regular">
             Adding to: {vaultData.title}
           </Text>
-        )}
-      </View>
+        </View>
+      )}
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -378,13 +393,17 @@ export default function AddResource() {
             <Button
               title="Create Resource"
               onPress={handleSubmit(onSubmit)}
-              loading={isSubmitting || createResourceMutation.isPending || isUploading}
+              loading={
+                isSubmitting || createResourceMutation.isPending || isUploading
+              }
             />
             <Button
               title="Cancel"
               variant="outline"
               onPress={() => router.back()}
-              disabled={isSubmitting || createResourceMutation.isPending || isUploading}
+              disabled={
+                isSubmitting || createResourceMutation.isPending || isUploading
+              }
             />
           </View>
         </View>
@@ -392,4 +411,3 @@ export default function AddResource() {
     </SafeAreaView>
   );
 }
-

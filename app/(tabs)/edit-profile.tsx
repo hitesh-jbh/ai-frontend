@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  TextInput,
-} from "react-native";
+import { View, Text, ScrollView, Alert, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
@@ -16,13 +9,13 @@ import { useAuthStore } from "../../store/auth-store";
 import { ProfilePictureUploader } from "../../components/ui/ProfilePictureUploader";
 import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ionicons } from "@expo/vector-icons";
 
 const editProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(255),
-  bio: z.string().max(500).optional(),
+  bio: z.union([z.string().max(500), z.literal("")]).optional(),
 });
 
 type EditProfileForm = z.infer<typeof editProfileSchema>;
@@ -104,18 +97,37 @@ export default function EditProfile() {
         }
       }
 
-      // Update profile with name, bio, and profile picture URL
-      return profile.updateProfile({
+      // Prepare update data
+      const updateData: {
+        name: string;
+        bio?: string;
+        profilePicture?: string;
+      } = {
         name: data.name,
-        bio: data.bio,
-        profilePicture: profilePictureUrl,
-      });
+      };
+
+      // Include bio - can be empty string to clear it
+      if (data.bio !== undefined) {
+        const trimmedBio = data.bio.trim();
+        updateData.bio = trimmedBio === "" ? "" : trimmedBio;
+      }
+
+      // Only include profilePicture if it's a valid URL (not a local file path)
+      // If profilePictureUrl is undefined or empty, don't send it (keeps existing)
+      if (profilePictureUrl && !profilePictureUrl.startsWith("file://")) {
+        updateData.profilePicture = profilePictureUrl;
+      }
+
+      // Update profile
+      return profile.updateProfile(updateData);
     },
     onSuccess: (data) => {
       if (user) {
         setUser({ ...user, ...data });
       }
+      // Invalidate and refetch profile data
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.refetchQueries({ queryKey: ["profile"] });
       Alert.alert("Success", "Profile updated successfully");
       router.back();
     },
@@ -137,20 +149,7 @@ export default function EditProfile() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Edit Profile
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Edit Profile" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -160,6 +159,7 @@ export default function EditProfile() {
               imageUri={profileImageUri}
               onImageSelected={setProfileImageUri}
               size={120}
+              editable={true}
             />
           </View>
 

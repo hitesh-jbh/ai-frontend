@@ -1,26 +1,13 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function Quizzes() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Quizzes
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Quizzes" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -38,4 +25,3 @@ export default function Quizzes() {
     </SafeAreaView>
   );
 }
-

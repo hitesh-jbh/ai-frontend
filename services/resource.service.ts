@@ -44,29 +44,53 @@ export interface ApiResponse<T> {
 }
 
 export const createResourceService = (axiosInstance: AxiosInstance) => ({
-  async uploadFile(fileUri: string, resourceType: "pdf" | "video" | "note"): Promise<string> {
+  async uploadFile(
+    fileUri: string,
+    resourceType: "pdf" | "video" | "note",
+    vaultId: string,
+    resourceId: string
+  ): Promise<string> {
     const formData = new FormData();
     const filename = fileUri.split("/").pop() || "file";
     const match = /\.(\w+)$/.exec(filename);
-    const mimeType = match ? `image/${match[1]}` : `image/jpeg`;
+
+    // Determine correct MIME type based on file extension and resource type
+    let mimeType = "application/octet-stream";
+    if (resourceType === "video") {
+      mimeType = "video/mp4";
+    } else if (resourceType === "pdf") {
+      mimeType = "application/pdf";
+    } else if (match) {
+      const ext = match[1].toLowerCase();
+      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+        mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+      }
+    }
 
     formData.append("file", {
       uri: fileUri,
       name: filename,
       type: mimeType,
     } as any);
-    formData.append("type", resourceType);
+    formData.append("vaultId", vaultId);
+    formData.append("resourceId", resourceId);
+    formData.append("type", resourceType); // Add type so multer knows where to save the file
 
-    const response = await axiosInstance.post<ApiResponse<{ fileUrl: string }>>(
-      "/resources/upload",
-      formData,
-      {
+    try {
+      const response = await axiosInstance.post<
+        ApiResponse<{ fileUrl: string }>
+      >("/resources/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-      }
-    );
-    return response.data.data.fileUrl;
+        timeout: 300000, // 5 minutes for large file uploads
+        maxContentLength: 104857600, // 100MB
+        maxBodyLength: 104857600, // 100MB
+      });
+      return response.data.data.fileUrl;
+    } catch (error: any) {
+      throw error;
+    }
   },
 
   async createResource(data: CreateResourceRequest): Promise<Resource> {
@@ -77,10 +101,14 @@ export const createResourceService = (axiosInstance: AxiosInstance) => ({
     return response.data.data;
   },
 
-  async getVaultResources(vaultId: string): Promise<Resource[]> {
-    const response = await axiosInstance.get<ApiResponse<Resource[]>>(
-      `/resources/vault/${vaultId}`
-    );
+  async getVaultResources(
+    vaultId: string,
+    limit = 20,
+    offset = 0
+  ): Promise<{ resources: Resource[]; total: number }> {
+    const response = await axiosInstance.get<
+      ApiResponse<{ resources: Resource[]; total: number }>
+    >(`/resources/vault/${vaultId}?limit=${limit}&offset=${offset}`);
     return response.data.data;
   },
 
@@ -91,7 +119,10 @@ export const createResourceService = (axiosInstance: AxiosInstance) => ({
     return response.data.data;
   },
 
-  async updateResource(id: string, data: UpdateResourceRequest): Promise<Resource> {
+  async updateResource(
+    id: string,
+    data: UpdateResourceRequest
+  ): Promise<Resource> {
     const response = await axiosInstance.put<ApiResponse<Resource>>(
       `/resources/${id}`,
       data

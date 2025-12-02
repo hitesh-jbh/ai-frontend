@@ -103,30 +103,51 @@ export const authService = {
   }> {
     const refreshToken = await SecureStore.getItemAsync("refreshToken");
     if (!refreshToken) {
+      console.error("No refresh token available in SecureStore");
       throw new Error("No refresh token available");
     }
 
-    // Use axiosRefreshInstance which doesn't have interceptors
-    // This avoids circular dependency when refreshing tokens
-    const response = await axiosRefreshInstance.post<
-      ApiResponse<{ accessToken: string; refreshToken: string }>
-    >("/auth/refresh", { refreshToken });
+    console.log("Attempting to refresh token...");
 
-    const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+    try {
+      // Use axiosRefreshInstance which doesn't have interceptors
+      // This avoids circular dependency when refreshing tokens
+      const response = await axiosRefreshInstance.post<
+        ApiResponse<{ accessToken: string; refreshToken: string }>
+      >("/auth/refresh", { refreshToken });
 
-    // Store new tokens
-    await SecureStore.setItemAsync("accessToken", accessToken);
-    if (newRefreshToken) {
-      await SecureStore.setItemAsync("refreshToken", newRefreshToken);
+      const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+
+      if (!accessToken) {
+        console.error("No access token in refresh response");
+        throw new Error("Invalid refresh response - no access token");
+      }
+
+      // Store new tokens in SecureStore
+      await SecureStore.setItemAsync("accessToken", accessToken);
+      if (newRefreshToken) {
+        await SecureStore.setItemAsync("refreshToken", newRefreshToken);
+      } else {
+        // If no new refresh token, keep the old one
+        console.warn("No new refresh token provided, keeping existing one");
+      }
+
+      console.log("Tokens refreshed and saved successfully");
+
+      return {
+        data: {
+          accessToken,
+          refreshToken: newRefreshToken || refreshToken, // Fallback to old token if new one not provided
+        },
+        status: response.status,
+      };
+    } catch (error: any) {
+      console.error(
+        "Token refresh error:",
+        error?.response?.data || error?.message
+      );
+      throw error;
     }
-
-    return {
-      data: {
-        accessToken,
-        refreshToken: newRefreshToken,
-      },
-      status: response.status,
-    };
   },
 
   async getProfile(): Promise<

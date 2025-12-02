@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -11,9 +12,11 @@ import { TopEarners } from "../../components/home/TopEarners";
 import { useServices } from "../../hooks/useServices";
 import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
+import { normalizeImageUrl } from "../../utils/imageUrl";
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [profileImageError, setProfileImageError] = useState(false);
   const user = useAuthStore((state) => state.user);
   const { leaderboard, profile } = useServices();
 
@@ -22,9 +25,20 @@ export default function Home() {
     queryKey: ["profile"],
     queryFn: () => profile.getProfile(),
     enabled: !!user,
+    staleTime: 0, // Always fetch fresh data
   });
 
   const displayUser = profileData || user;
+  const normalizedProfilePicture = normalizeImageUrl(
+    displayUser?.profilePicture
+  );
+
+  // Reset error state when profile picture changes
+  useEffect(() => {
+    if (normalizedProfilePicture) {
+      setProfileImageError(false);
+    }
+  }, [normalizedProfilePicture]);
 
   const { data: topEarners, isLoading: isLoadingEarners } = useQuery({
     queryKey: ["topEarners"],
@@ -41,27 +55,53 @@ export default function Home() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-6">
+    <SafeAreaView className="flex-1 bg-white">
+      <View
+        className="px-6 bg-white"
+        style={{
+          minHeight: 175,
+          justifyContent: "flex-end",
+        }}
+      >
         {/* Header */}
         <View className="flex-row justify-between items-center mb-4">
           <View className="flex-1">
-            <Text className="text-gray-900 text-3xl font-outfit-bold mb-1">
+            <Text className="text-gray-900 text-4xl font-outfit-bold mb-1">
               Connect
             </Text>
             <Text className="text-gray-600 text-sm font-outfit-regular">
               Trusted by creators across the globe.
             </Text>
           </View>
-          <TouchableOpacity activeOpacity={0.7}>
-            <View className="w-10 h-10 bg-gray-200 rounded-full items-center justify-center overflow-hidden">
-              {displayUser?.profilePicture ? (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/(tabs)/profile")}
+          >
+            <View className="w-16 h-16 bg-gray-200 rounded-full items-center justify-center overflow-hidden">
+              {normalizedProfilePicture && !profileImageError ? (
                 <Image
-                  source={{ uri: displayUser.profilePicture }}
-                  className="w-full h-full"
-                  resizeMode="cover"
+                  key={normalizedProfilePicture} // Force re-render when URL changes
+                  source={{ uri: normalizedProfilePicture }}
+                  style={{ width: 50, height: 50 }}
+                  contentFit="cover"
+                  transition={200}
+                  onError={(e) => {
+                    console.error(
+                      "Failed to load profile picture:",
+                      normalizedProfilePicture,
+                      e
+                    );
+                    setProfileImageError(true);
+                  }}
+                  onLoad={() => {
+                    console.log(
+                      "Profile picture loaded:",
+                      normalizedProfilePicture
+                    );
+                    setProfileImageError(false);
+                  }}
                 />
-              ) : displayUser ? (
+              ) : displayUser?.name ? (
                 <Text className="text-gray-600 font-outfit-semi-bold text-sm">
                   {displayUser.name.charAt(0).toUpperCase()}
                 </Text>

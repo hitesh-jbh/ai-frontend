@@ -1,0 +1,45 @@
+import React from "react";
+import { View, Text, TouchableOpacity } from "react-native";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
+interface ScreenHeaderProps {
+  title: string;
+  showBackButton?: boolean;
+  onBackPress?: () => void;
+}
+
+export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
+  title,
+  showBackButton = false,
+  onBackPress,
+}) => {
+  const handleBackPress = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else {
+      router.back();
+    }
+  };
+
+  return (
+    <View className="flex-row items-center px-6 min-h-[80px] justify-center">
+      {showBackButton && (
+        <TouchableOpacity
+          onPress={handleBackPress}
+          className="mr-4 bg-blue-500 w-10 h-10 rounded-full items-center justify-center"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
+      <Text className="text-gray-900 text-2xl font-outfit-bold flex-1 text-center">
+        {title}
+      </Text>
+
+      {showBackButton && (
+        <View className="w-14 h-14 rounded-full items-center justify-center" />
+      )}
+    </View>
+  );
+};

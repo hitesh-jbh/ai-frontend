@@ -3,9 +3,9 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Alert,
   TextInput,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,7 +71,7 @@ export default function EditResource() {
     try {
       if (resourceData?.type === "video") {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaType.Videos,
+          mediaTypes: ["videos"],
           allowsEditing: true,
           quality: 0.8,
         });
@@ -78,7 +79,10 @@ export default function EditResource() {
         if (!result.canceled && result.assets[0]) {
           setFileUri(result.assets[0].uri);
         }
-      } else if (resourceData?.type === "pdf" || resourceData?.type === "note") {
+      } else if (
+        resourceData?.type === "pdf" ||
+        resourceData?.type === "note"
+      ) {
         // For PDFs and notes, file selection would require expo-document-picker
         // For now, show an alert
         Alert.alert(
@@ -96,17 +100,39 @@ export default function EditResource() {
       let fileUrl = fileUri;
 
       // If fileUri is a local file and different from existing, upload it
-      if (fileUri && fileUri.startsWith("file://") && fileUri !== resourceData?.fileUrl) {
-        setIsUploading(true);
-        try {
-          fileUrl = await resource.uploadFile(
-            fileUri,
-            resourceData?.type || "note"
-          );
-        } catch (error) {
-          throw new Error("Failed to upload file");
-        } finally {
-          setIsUploading(false);
+      // Skip upload for "link" type resources as they don't need file uploads
+      // Only upload if it's a local file (starts with file://) and different from existing
+      if (
+        fileUri &&
+        fileUri.startsWith("file://") &&
+        fileUri !== resourceData?.fileUrl
+      ) {
+        const resourceType = resourceData?.type;
+        // Only upload if type is not "link" (link resources use URLs, not file uploads)
+        if (
+          resourceType &&
+          resourceType !== "link" &&
+          resourceData?.vaultId &&
+          id
+        ) {
+          setIsUploading(true);
+          try {
+            // TypeScript now knows resourceType is "pdf" | "video" | "note"
+            fileUrl = await resource.uploadFile(
+              fileUri,
+              resourceType as "pdf" | "video" | "note",
+              resourceData.vaultId,
+              id
+            );
+          } catch (error: any) {
+            const errorMessage =
+              error?.response?.data?.message ||
+              error?.message ||
+              "Failed to upload file";
+            throw new Error(errorMessage);
+          } finally {
+            setIsUploading(false);
+          }
         }
       }
 
@@ -140,7 +166,9 @@ export default function EditResource() {
     },
     onError: (error: any) => {
       const errorMessage =
-        error?.response?.data?.message || error?.message || "Failed to update resource";
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update resource";
       Alert.alert("Error", errorMessage);
     },
   });
@@ -161,20 +189,7 @@ export default function EditResource() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <View className="px-6 pt-4">
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-4"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text className="text-gray-900 text-xl font-outfit-bold">
-            Edit Resource
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader title="Edit Resource" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -316,13 +331,17 @@ export default function EditResource() {
             <Button
               title="Save Changes"
               onPress={handleSubmit(onSubmit)}
-              loading={isSubmitting || updateResourceMutation.isPending || isUploading}
+              loading={
+                isSubmitting || updateResourceMutation.isPending || isUploading
+              }
             />
             <Button
               title="Cancel"
               variant="outline"
               onPress={() => router.back()}
-              disabled={isSubmitting || updateResourceMutation.isPending || isUploading}
+              disabled={
+                isSubmitting || updateResourceMutation.isPending || isUploading
+              }
             />
           </View>
         </View>
@@ -330,4 +349,3 @@ export default function EditResource() {
     </SafeAreaView>
   );
 }
-

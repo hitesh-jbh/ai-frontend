@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,52 +9,85 @@ import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-const createVaultSchema = z.object({
+const editVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(1000).optional(),
 });
 
-type CreateVaultForm = z.infer<typeof createVaultSchema>;
+type EditVaultForm = z.infer<typeof editVaultSchema>;
 
-export default function CreateVault() {
+export default function EditVault() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { vault } = useServices();
+
+  const { data: vaultData, isLoading } = useQuery({
+    queryKey: ["vault", id],
+    queryFn: () => vault.getVault(id!),
+    enabled: !!id,
+  });
 
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<CreateVaultForm>({
-    resolver: zodResolver(createVaultSchema),
+    reset,
+  } = useForm<EditVaultForm>({
+    resolver: zodResolver(editVaultSchema),
+    defaultValues: {
+      title: vaultData?.title || "",
+      description: vaultData?.description || "",
+    },
   });
 
-  const createVaultMutation = useMutation({
-    mutationFn: (data: CreateVaultForm) => vault.createVault(data),
+  React.useEffect(() => {
+    if (vaultData) {
+      reset({
+        title: vaultData.title,
+        description: vaultData.description || "",
+      });
+    }
+  }, [vaultData, reset]);
+
+  const updateVaultMutation = useMutation({
+    mutationFn: (data: EditVaultForm) => vault.updateVault(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
-      queryClient.invalidateQueries({ queryKey: ["allResources"] });
-      Alert.alert("Success", "Vault created successfully");
+      queryClient.invalidateQueries({ queryKey: ["vault", id] });
+      Alert.alert("Success", "Vault updated successfully");
       router.back();
     },
     onError: (error: any) => {
-      console.error("Vault creation error:", error);
+      console.error("Vault update error:", error);
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to create vault. Please try again.";
+        "Failed to update vault. Please try again.";
       Alert.alert("Error", errorMessage);
     },
   });
 
-  const onSubmit = async (data: CreateVaultForm) => {
-    createVaultMutation.mutate(data);
+  const onSubmit = async (data: EditVaultForm) => {
+    updateVaultMutation.mutate(data);
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-gray-500 text-sm font-outfit-regular">
+            Loading vault...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Create Vault" showBackButton />
+      <ScreenHeader title="Edit Vault" showBackButton />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-6">
@@ -86,9 +119,9 @@ export default function CreateVault() {
           </View>
 
           <Button
-            title="Create Vault"
+            title="Update Vault"
             onPress={handleSubmit(onSubmit)}
-            loading={isSubmitting || createVaultMutation.isPending}
+            loading={isSubmitting || updateVaultMutation.isPending}
           />
         </View>
       </ScrollView>

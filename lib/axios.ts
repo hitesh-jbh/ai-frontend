@@ -1,20 +1,5 @@
 import axios from "axios";
-import Constants from "expo-constants";
-
-// Get API URL from environment or use defaults
-const getApiUrl = (): string => {
-  // First, try to get from expo config extra or env
-  const envUrl =
-    Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL;
-
-  if (envUrl) {
-    return envUrl;
-  }
-
-  return __DEV__
-    ? "https://r2zjcv4s-8080.inc1.devtunnels.ms/api" // Android emulator
-    : "http://localhost:8080/api"; // Production (adjust as needed)
-};
+import { getApiUrl } from "../utils/config";
 
 const API_URL = getApiUrl();
 
@@ -24,7 +9,9 @@ export const axiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 15000, // 15 second timeout
+  timeout: 300000, // 5 minutes timeout (for large file uploads)
+  maxContentLength: 104857600, // 100MB max content length
+  maxBodyLength: 104857600, // 100MB max body length
 });
 
 // Create a separate axios instance for refresh token calls

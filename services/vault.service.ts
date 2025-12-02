@@ -25,6 +25,12 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface PaginatedResponse<T> {
+  vaults?: T[];
+  resources?: T[];
+  total: number;
+}
+
 export const createVaultService = (axiosInstance: AxiosInstance) => ({
   async createVault(data: CreateVaultRequest): Promise<Vault> {
     const response = await axiosInstance.post<ApiResponse<Vault>>(
@@ -34,13 +40,20 @@ export const createVaultService = (axiosInstance: AxiosInstance) => ({
     return response.data.data;
   },
 
-  async getUserVaults(): Promise<Vault[]> {
-    const response = await axiosInstance.get<ApiResponse<Vault[]>>("/vaults");
+  async getUserVaults(
+    limit = 20,
+    offset = 0
+  ): Promise<{ vaults: Vault[]; total: number }> {
+    const response = await axiosInstance.get<
+      ApiResponse<PaginatedResponse<Vault>>
+    >(`/vaults?limit=${limit}&offset=${offset}`);
     return response.data.data;
   },
 
   async getVault(id: string): Promise<Vault> {
-    const response = await axiosInstance.get<ApiResponse<Vault>>(`/vaults/${id}`);
+    const response = await axiosInstance.get<ApiResponse<Vault>>(
+      `/vaults/${id}`
+    );
     return response.data.data;
   },
 

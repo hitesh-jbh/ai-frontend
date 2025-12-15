@@ -348,14 +348,14 @@ export default function ManageSubscriptions() {
   // Check if user can buy a new plan
   const canBuyNewPlan = (planType: string) => {
     if (!currentStatus?.subscription) return true; // No subscription, can buy
-    
+
     const currentPlan = currentStatus.subscription.plan;
-    
+
     // Prevent switching from paid plan to free plan
     if (planType === "free" && currentPlan !== "free") {
       return false; // Cannot downgrade from paid to free
     }
-    
+
     if (planType === "free") return true; // Allow free if already on free or no subscription
     if (currentPlan === "free") return true; // Free users can upgrade
 

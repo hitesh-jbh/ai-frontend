@@ -35,7 +35,7 @@ const TabButton: React.FC<TabButtonProps> = ({ label, isActive, onPress }) => {
       activeOpacity={0.7}
     >
       <Text
-        className={`text-sm font-outfit-semi-bold ${
+        className={`text-base font-outfit-semi-bold ${
           isActive ? "text-white" : "text-gray-700"
         }`}
       >
@@ -99,11 +99,11 @@ const TopContributorCard: React.FC<TopContributorCardProps> = ({
           className="absolute bottom-0 right-0 rounded-full w-6 h-6 items-center justify-center border-2 border-white"
           style={{ backgroundColor: badgeColor }}
         >
-          <Text className="text-white text-xs font-outfit-bold">#{rank}</Text>
+          <Text className="text-white text-sm font-outfit-bold">#{rank}</Text>
         </View>
       </View>
       <Text
-        className="text-gray-900 text-sm font-outfit-semi-bold mb-1"
+        className="text-gray-900 text-base font-outfit-semi-bold mb-1"
         numberOfLines={1}
       >
         {entry.userName}
@@ -115,7 +115,7 @@ const TopContributorCard: React.FC<TopContributorCardProps> = ({
           color={isTopTwo ? "#F59E0B" : "#F97316"}
         />
         <Text
-          className="text-sm font-outfit-semi-bold ml-1"
+          className="text-base font-outfit-semi-bold ml-1"
           style={{ color: isTopTwo ? "#F59E0B" : "#F97316" }}
         >
           {entry.score}
@@ -182,6 +182,7 @@ export default function Leaderboard() {
   });
 
   // Infinite query for leaderboard entries
+  // First page fetches top 3 (for cards), subsequent pages fetch 20 at a time
   const {
     data,
     fetchNextPage,
@@ -191,21 +192,33 @@ export default function Leaderboard() {
     refetch,
   } = useInfiniteQuery({
     queryKey: ["leaderboard", selectedPeriod],
-    queryFn: ({ pageParam = 0 }) =>
-      leaderboard.getTopUsers(20, pageParam, selectedPeriod),
+    queryFn: ({ pageParam = 0 }) => {
+      // First page: get top 3 for cards
+      // Subsequent pages: get 20 at a time for list
+      const limit = pageParam === 0 ? 3 : 20;
+      const offset = pageParam === 0 ? 0 : 3 + (pageParam - 1) * 20;
+      return leaderboard.getTopUsers(limit, offset, selectedPeriod);
+    },
     getNextPageParam: (lastPage, allPages) => {
+      // Calculate total entries loaded so far
       const totalLoaded = allPages.reduce(
         (sum, page) => sum + page.entries.length,
         0
       );
-      return totalLoaded < lastPage.total ? totalLoaded : undefined;
+      // If we've loaded less than total, return next page number
+      if (totalLoaded < lastPage.total) {
+        return allPages.length; // Next page number
+      }
+      return undefined; // No more pages
     },
     initialPageParam: 0,
   });
 
   // Flatten all pages into a single array
   const allEntries = data?.pages.flatMap((page) => page.entries) || [];
-  const topThree = allEntries.slice(0, 3);
+  // Top 3 are always from the first page (which fetches 3 entries)
+  const topThree = data?.pages[0]?.entries.slice(0, 3) || [];
+  // Remaining entries are from all pages, excluding the first 3
   const remainingEntries = allEntries.slice(3);
 
   const periods: { key: Period; label: string }[] = [
@@ -241,10 +254,10 @@ export default function Leaderboard() {
         data={remainingEntries}
         keyExtractor={(item) => item.userId}
         renderItem={({ item, index }) => (
-          <UserListItem entry={item} index={index + 4} />
+          <UserListItem entry={item} index={topThree.length + index + 1} />
         )}
         ListHeaderComponent={
-          <View className="pb-6">
+          <View className="pb-3">
             {/* Period Tabs */}
             <View className="flex-row gap-2 mb-6">
               {periods.map((period) => (
@@ -263,7 +276,7 @@ export default function Leaderboard() {
                 <Text className="text-white text-2xl font-outfit-bold mb-2">
                   Your Rank
                 </Text>
-                <Text className="text-white/90 text-sm font-outfit-regular mb-6">
+                <Text className="text-white/90 text-base font-outfit-regular mb-6">
                   Here's where you stand in the competition
                 </Text>
 
@@ -272,7 +285,7 @@ export default function Leaderboard() {
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       #{userRankData.entry.rank}
                     </Text>
-                    <Text className="text-white/80 text-xs font-outfit-regular">
+                    <Text className="text-white/80 text-sm font-outfit-regular">
                       Out of {userRankData.totalUsers} users
                     </Text>
                   </View>
@@ -280,7 +293,7 @@ export default function Leaderboard() {
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       {userRankData.entry.score}
                     </Text>
-                    <Text className="text-white/80 text-xs font-outfit-regular">
+                    <Text className="text-white/80 text-sm font-outfit-regular">
                       Coins earned
                     </Text>
                   </View>
@@ -288,7 +301,7 @@ export default function Leaderboard() {
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       #{Math.max(1, userRankData.entry.rank - 1)}
                     </Text>
-                    <Text className="text-white/80 text-xs font-outfit-regular">
+                    <Text className="text-white/80 text-sm font-outfit-regular">
                       Climb higher!
                     </Text>
                   </View>
@@ -296,7 +309,7 @@ export default function Leaderboard() {
 
                 <View className="flex-row items-center">
                   <Ionicons name="flame" size={16} color="#FFFFFF" />
-                  <Text className="text-white text-sm font-outfit-medium ml-1">
+                  <Text className="text-white text-base font-outfit-medium ml-1">
                     Amazing! You're on the podium!
                   </Text>
                 </View>
@@ -307,12 +320,12 @@ export default function Leaderboard() {
             <View className="mb-6">
               <View className="flex-row items-center mb-4">
                 <Ionicons name="people" size={20} color="#3B82F6" />
-                <Text className="text-gray-900 text-lg font-outfit-bold ml-2">
+                <Text className="text-gray-900 text-xl font-outfit-bold ml-2">
                   Our top contributors
                 </Text>
               </View>
 
-              {isLoading ? (
+              {isLoading && topThree.length === 0 ? (
                 <View className="py-8 items-center">
                   <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
@@ -337,7 +350,7 @@ export default function Leaderboard() {
 
             {/* User List Header */}
             {remainingEntries.length > 0 && (
-              <View className="mb-4">
+              <View className="px-2">
                 <View className="flex-row justify-between items-center mb-3">
                   <Text className="text-gray-900 text-base font-outfit-semi-bold">
                     User

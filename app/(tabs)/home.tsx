@@ -48,7 +48,7 @@ export default function Home() {
 
   const { data: topEarnersData, isLoading: isLoadingEarners } = useQuery({
     queryKey: ["topEarners"],
-    queryFn: () => leaderboard.getTopUsers(10, 0, "all"),
+    queryFn: () => leaderboard.getTopUsers(3, 0, "all"), // Only fetch top 3 for home page
   });
 
   const topEarners = topEarnersData?.entries || [];

@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/auth-store";
 /**
  * Component that fetches subscription status when user is authenticated
  * Should be placed in a component that renders after auth initialization
+ * Note: Toast notifications for expired/exhausted plans are handled in the search screen
  */
 export function SubscriptionInitializer() {
   const { subscription } = useServices();

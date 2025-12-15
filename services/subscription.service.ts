@@ -134,10 +134,10 @@ export const createSubscriptionService = (axiosInstance: AxiosInstance) => ({
   /**
    * Create Razorpay order for paid subscription
    */
-  async createOrder(plan: "smart" | "pro" | "creator"): Promise<CreateOrderResponse> {
+  async createOrder(planId: string): Promise<CreateOrderResponse> {
     const response = await axiosInstance.post<ApiResponse<CreateOrderResponse>>(
       "/payments/create-order",
-      { plan }
+      { planId }
     );
     return response.data.data;
   },
@@ -146,7 +146,7 @@ export const createSubscriptionService = (axiosInstance: AxiosInstance) => ({
    * Verify payment and activate subscription
    */
   async verifyPayment(data: {
-    plan: "smart" | "pro" | "creator";
+    planId: string;
     razorpayOrderId: string;
     razorpayPaymentId: string;
     razorpaySignature: string;

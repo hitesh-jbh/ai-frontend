@@ -12,7 +12,7 @@ export const StatCard: React.FC<StatCardProps> = ({ value, label }) => {
       <Text className="text-gray-900 text-2xl font-outfit-bold mb-1 text-center">
         {value}
       </Text>
-      <Text className="text-gray-600 text-xs font-outfit-regular text-center">
+      <Text className="text-gray-600 text-base font-outfit-regular text-center">
         {label}
       </Text>
     </View>

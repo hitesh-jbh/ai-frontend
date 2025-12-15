@@ -1,6 +1,5 @@
 import { Redirect, Tabs } from "expo-router";
 import React from "react";
-import { Platform, View } from "react-native";
 import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -28,7 +27,7 @@ const TabsLayout = () => {
           paddingTop: 12,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 13,
           fontFamily: "Outfit-Medium",
         },
       }}

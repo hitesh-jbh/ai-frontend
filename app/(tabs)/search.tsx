@@ -51,17 +51,63 @@ export default function Search() {
     }
   }, [currentStatus, setSubscriptionStatus]);
 
-  // Check subscription when component mounts
+  // Check subscription status when component mounts or updates
   useEffect(() => {
-    if (currentStatus && !currentStatus.hasSubscription) {
+    if (!currentStatus) return;
+
+    const subscription = currentStatus.subscription;
+
+    // Check if no subscription
+    if (!currentStatus.hasSubscription || !subscription) {
       showInfoToast(
         "Subscription Required",
         "You need an active subscription to search. Please choose a plan to continue."
       );
-      // Navigate after a short delay to allow toast to show
       setTimeout(() => {
-        router.push("/(tabs)/manage-subscriptions");
+        router.push("/(tabs)/manage-subscriptions" as any);
       }, 1500);
+      return;
+    }
+
+    // Check if subscription is expired
+    if (subscription.expiresAt) {
+      const expiresAt = new Date(subscription.expiresAt);
+      const now = new Date();
+      if (expiresAt < now) {
+        showErrorToast(
+          "Subscription Expired",
+          "Your subscription has expired. Please renew or choose a new plan to continue searching."
+        );
+        setTimeout(() => {
+          router.push("/(tabs)/manage-subscriptions" as any);
+        }, 2000);
+        return;
+      }
+    }
+
+    // Check if subscription is exhausted (queries or tokens limit reached)
+    // Only check if canSearch is false (meaning limit is reached)
+    if (!currentStatus.canSearch) {
+      const isQueriesExhausted =
+        subscription.queriesUsedToday >= subscription.dailyQueriesLimit;
+      const isTokensExhausted =
+        subscription.tokensUsedToday >= subscription.dailyTokensLimit;
+
+      let message = "Your daily limit has been reached. ";
+      if (isQueriesExhausted && isTokensExhausted) {
+        message += "You've used all your queries and tokens for today.";
+      } else if (isQueriesExhausted) {
+        message += `You've used all ${subscription.dailyQueriesLimit} queries for today.`;
+      } else {
+        message += `You've used all ${subscription.dailyTokensLimit.toLocaleString()} tokens for today.`;
+      }
+      message += " Please upgrade your plan or wait for the limit to reset tomorrow.";
+
+      showErrorToast("Daily Limit Reached", message);
+      setTimeout(() => {
+        router.push("/(tabs)/manage-subscriptions" as any);
+      }, 2000);
+      return;
     }
   }, [currentStatus]);
 
@@ -119,6 +165,15 @@ export default function Search() {
     retry: 1,
     staleTime: 30000, // Cache results for 30 seconds to prevent duplicate calls
   });
+
+  // Invalidate subscription status after successful search to update usage
+  useEffect(() => {
+    if (searchResult) {
+      queryClient.invalidateQueries({
+        queryKey: ["subscriptionStatus"],
+      });
+    }
+  }, [searchResult, queryClient]);
 
   // Handle search errors
   useEffect(() => {

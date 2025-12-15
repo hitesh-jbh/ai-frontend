@@ -24,11 +24,10 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
   const { analytics } = useServices();
 
   const { data: chartData, isLoading } = useQuery({
-    queryKey: ["analyticsChart", selectedPeriod],
-    queryFn: () => analytics.getTopCreatorsForChart(5, selectedPeriod),
+    queryKey: ["analyticsChart", selectedPeriod, 4],
+    queryFn: () => analytics.getTopCreatorsForChart(4, selectedPeriod),
     staleTime: 1000 * 60 * 60, // Cache for 30 seconds
   });
-
   const data = chartData || [];
   const values = data.map((d) => d.value);
   const maxValue = Math.max(...values, 1); // Avoid division by zero
@@ -48,7 +47,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
   ];
 
   const getBarColor = (index: number, value: number) => {
-    const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
+    const colors = ["#3B82F6", "#10B981", "#EF4444", "#8B5CF6"]; // Removed orange (#F59E0B)
     return colors[index % colors.length];
   };
 
@@ -57,7 +56,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
       <View className="flex-row justify-between items-center mb-4">
         <View className="flex-row items-center">
           <Ionicons name="analytics" size={20} color="#3B82F6" />
-          <Text className="text-gray-900 text-lg font-outfit-semi-bold ml-2">
+          <Text className="text-gray-900 text-xl font-outfit-semi-bold ml-2">
             Top Creators
           </Text>
         </View>
@@ -66,7 +65,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
           activeOpacity={0.7}
           onPress={() => setShowPeriodModal(true)}
         >
-          <Text className="text-gray-700 text-sm font-outfit-regular mr-1">
+          <Text className="text-gray-700 text-lg font-outfit-regular mr-1">
             {periodLabels[selectedPeriod]}
           </Text>
           <Ionicons name="chevron-down" size={16} color="#6B7280" />
@@ -87,7 +86,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
       ) : (
         <>
           {/* Chart Bars */}
-          <View className="flex-row items-end justify-between h-32 mb-2">
+          <View className="flex-row items-end justify-between h-32 mb-2 mt-8">
             {data.map((item, index) => {
               const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
               const barColor = getBarColor(index, item.value);
@@ -101,7 +100,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
                     {/* Value label on top of bar */}
                     <View className="absolute -top-6 w-full items-center">
                       <Text
-                        className="text-xs font-outfit-semi-bold"
+                        className="text-sm font-outfit-semi-bold"
                         style={{ color: barColor }}
                       >
                         {item.value}
@@ -136,7 +135,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
             {data.map((item, index) => (
               <View key={index} className="flex-1 items-center">
                 <Text
-                  className="text-gray-500 text-xs font-outfit-regular text-center"
+                  className="text-gray-500 text-sm font-outfit-regular text-center"
                   numberOfLines={1}
                 >
                   {item.name.length > 8
@@ -150,7 +149,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
           {/* Max value indicator */}
           {maxValue > 0 && (
             <View className="mt-2 pt-2 border-t border-gray-100">
-              <Text className="text-gray-400 text-xs font-outfit-regular text-center">
+              <Text className="text-gray-400 text-sm font-outfit-regular text-center">
                 Max: {maxValue} coins
               </Text>
             </View>

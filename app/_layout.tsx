@@ -10,6 +10,7 @@ import { AuthInitializer } from "../components/AuthInitializer";
 import { SubscriptionInitializer } from "../components/SubscriptionInitializer";
 import ToastManager from "toastify-react-native";
 import { toastConfig } from "@/utils/toast";
+import { NavigationContainer } from "@react-navigation/native";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({

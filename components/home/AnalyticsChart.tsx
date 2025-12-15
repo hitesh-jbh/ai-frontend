@@ -65,7 +65,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({
           activeOpacity={0.7}
           onPress={() => setShowPeriodModal(true)}
         >
-          <Text className="text-gray-700 text-lg font-outfit-regular mr-1">
+          <Text className="text-gray-700 text-base font-outfit-regular mr-1">
             {periodLabels[selectedPeriod]}
           </Text>
           <Ionicons name="chevron-down" size={16} color="#6B7280" />

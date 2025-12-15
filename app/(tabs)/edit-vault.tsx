@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { showSuccessToast, showErrorToast } from "../../utils/toast";
 
 const editVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
@@ -56,7 +57,7 @@ export default function EditVault() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vault", id] });
-      Alert.alert("Success", "Vault updated successfully");
+      showSuccessToast("Success", "Vault updated successfully");
       router.back();
     },
     onError: (error: any) => {
@@ -65,7 +66,7 @@ export default function EditVault() {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to update vault. Please try again.";
-      Alert.alert("Error", errorMessage);
+      showErrorToast("Error", errorMessage);
     },
   });
 

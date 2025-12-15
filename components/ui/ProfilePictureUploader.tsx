@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { View, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { normalizeImageUrl } from "../../utils/imageUrl";
+import { showErrorToast, showInfoToast } from "../../utils/toast";
 
 interface ProfilePictureUploaderProps {
   imageUri?: string;
@@ -37,7 +38,7 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
+        showInfoToast(
           "Permission Required",
           "We need access to your photos to upload a profile picture."
         );
@@ -62,7 +63,7 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image. Please try again.");
+      showErrorToast("Error", "Failed to pick image. Please try again.");
     }
   };
 

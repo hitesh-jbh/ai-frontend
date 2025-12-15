@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { authService } from "../services/auth.service";
 import * as SecureStore from "expo-secure-store";
+import { useSubscriptionStore } from "./subscription-store";
 
 interface User {
   id: string;
@@ -46,12 +47,19 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
+      // Loading state
+      set({ isLoading: true });
       await authService.logout();
     } catch (error) {
       console.error("Logout service error:", error);
       // Continue with logout even if API call fails
+    } finally {
+      set({ isAuthenticated: false, user: null, isLoading: false });
+      // Clear subscription store on logout
+      useSubscriptionStore.getState().clearSubscription();
+      // Note: React Query cache should be cleared in the component that calls logout
+      // (e.g., options.tsx already does queryClient.clear())
     }
-    set({ isAuthenticated: false, user: null });
   },
 
   initialize: async () => {
@@ -67,6 +75,9 @@ export const useAuthStore = create<AuthState>((set) => ({
             user: { ...profile, accessToken, refreshToken },
             isLoading: false,
           });
+
+          // Fetch subscription status after profile is loaded
+          // This will be handled by components that use subscription store
         } catch (error: any) {
           // If profile fetch fails with 401, try to refresh token
           if (error?.response?.status === 401) {
@@ -83,6 +94,8 @@ export const useAuthStore = create<AuthState>((set) => ({
                   },
                   isLoading: false,
                 });
+
+                // Fetch subscription status after profile is loaded
               } else {
                 // Refresh failed, clear tokens
                 await SecureStore.deleteItemAsync("accessToken");

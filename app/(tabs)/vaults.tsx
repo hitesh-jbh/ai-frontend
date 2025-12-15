@@ -23,6 +23,8 @@ import { useAuthStore } from "../../store/auth-store";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
+import { showSuccessToast, showErrorToast } from "../../utils/toast";
+import { ResponsiveText } from "@/utils/responsive-text";
 
 interface VaultCardProps {
   vault: Vault;
@@ -201,20 +203,20 @@ export default function Vaults() {
       queryClient.invalidateQueries({ queryKey: ["vaultResources"] });
       queryClient.invalidateQueries({ queryKey: ["resources"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
-      
+
       // Invalidate leaderboard and analytics queries
       queryClient.invalidateQueries({ queryKey: ["topEarners"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
       queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
-      
-      Alert.alert(
+
+      showSuccessToast(
         "Success",
         "Vault and all its resources deleted successfully"
       );
     },
     onError: () => {
-      Alert.alert("Error", "Failed to delete vault");
+      showErrorToast("Error", "Failed to delete vault");
     },
   });
 
@@ -262,12 +264,15 @@ export default function Vaults() {
       <View className="px-6">
         {/* Profile Section */}
         <View className="items-center mb-6">
-          <View className="w-20 h-20 bg-gray-200 rounded-full items-center justify-center mb-2 overflow-hidden">
+          <View
+            className="bg-gray-200 rounded-full items-center justify-center mb-2 overflow-hidden"
+            style={{ width: 120, height: 120 }}
+          >
             {normalizedProfilePicture && !profileImageError ? (
               <Image
                 key={normalizedProfilePicture}
                 source={{ uri: normalizedProfilePicture }}
-                style={{ width: 80, height: 80 }}
+                style={{ width: 120, height: 120 }}
                 contentFit="cover"
                 transition={200}
                 onError={(e) => {
@@ -287,14 +292,16 @@ export default function Vaults() {
                 }}
               />
             ) : displayUser?.name ? (
-              <Text className="text-gray-600 font-outfit-semi-bold text-2xl">
+              <Text
+                className={`text-gray-600 font-outfit-bold ${ResponsiveText.display}`}
+              >
                 {displayUser.name.charAt(0).toUpperCase()}
               </Text>
             ) : (
-              <Ionicons name="person" size={32} color="#6B7280" />
+              <Ionicons name="person" size={60} color="#6B7280" />
             )}
           </View>
-          <Text className="text-gray-900 text-xl font-outfit-bold uppercase mb-1">
+          <Text className="text-gray-900 text-xl font-outfit-bold uppercase mb-1 mt-2">
             {displayUser?.name || "User"}
           </Text>
           {displayUser?.bio && (

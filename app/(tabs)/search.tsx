@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -16,7 +17,10 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SearchBar } from "../../components/ui/SearchBar";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
+import { useSubscriptionStore } from "../../store/subscription-store";
+import { SearchResult } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
+import { showInfoToast, showErrorToast } from "../../utils/toast";
 
 export default function Search() {
   const params = useLocalSearchParams<{ query?: string }>();
@@ -24,8 +28,38 @@ export default function Search() {
   const [debouncedQuery, setDebouncedQuery] = useState(params.query || "");
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
-  const { search } = useServices();
+  const { search, subscription } = useServices();
   const queryClient = useQueryClient();
+  const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
+
+  // Fetch subscription status on mount
+  const { data: currentStatus, refetch: refetchSubscription } = useQuery({
+    queryKey: ["subscriptionStatus"],
+    queryFn: () => subscription.getCurrentStatus(),
+    staleTime: 30000, // Cache for 30 seconds
+    retry: 1,
+  });
+
+  // Update store when status is fetched
+  useEffect(() => {
+    if (currentStatus) {
+      setSubscriptionStatus(currentStatus);
+    }
+  }, [currentStatus, setSubscriptionStatus]);
+
+  // Check subscription when component mounts
+  useEffect(() => {
+    if (currentStatus && !currentStatus.hasSubscription) {
+      showInfoToast(
+        "Subscription Required",
+        "You need an active subscription to search. Please choose a plan to continue."
+      );
+      // Navigate after a short delay to allow toast to show
+      setTimeout(() => {
+        router.push("/(tabs)/manage-subscriptions");
+      }, 1500);
+    }
+  }, [currentStatus]);
 
   // Update search query when params change - only once
   useEffect(() => {
@@ -65,7 +99,7 @@ export default function Search() {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<SearchResult>({
     queryKey: ["search", activeQuery],
     queryFn: async () => {
       if (!activeQuery) {
@@ -77,10 +111,43 @@ export default function Search() {
         offset: 0,
       });
     },
-    enabled: activeQuery.length > 0,
+    enabled: activeQuery.length > 0 && currentStatus?.hasSubscription === true,
     retry: 1,
     staleTime: 30000, // Cache results for 30 seconds to prevent duplicate calls
   });
+
+  // Handle search errors
+  useEffect(() => {
+    if (error) {
+      const errorAny = error as any;
+      // Handle subscription-related errors
+      if (errorAny?.response?.status === 402) {
+        // No subscription
+        showInfoToast(
+          "Subscription Required",
+          errorAny?.response?.data?.message ||
+            "You need an active subscription to search."
+        );
+        // Navigate after a short delay
+        setTimeout(() => {
+          router.push("/(tabs)/manage-subscriptions");
+        }, 1500);
+      } else if (errorAny?.response?.status === 429) {
+        // Limit reached
+        showErrorToast(
+          "Daily Limit Reached",
+          errorAny?.response?.data?.message ||
+            "You've reached your daily query limit. Please upgrade your plan or wait for the limit to reset."
+        );
+        // Refresh subscription status
+        refetchSubscription();
+        // Navigate after a short delay
+        setTimeout(() => {
+          router.push("/(tabs)/manage-subscriptions");
+        }, 2000);
+      }
+    }
+  }, [error, refetchSubscription]);
 
   // Submit community answer mutation
   const submitAnswerMutation = useMutation({
@@ -94,11 +161,11 @@ export default function Search() {
       setUserAnswer("");
       queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
 
-      // Show alert based on whether it was an update or new submission
+      // Show toast based on whether it was an update or new submission
       if (data?.isUpdate) {
-        alert("Your answer has been updated successfully!");
+        showSuccessToast("Success", "Your answer has been updated successfully!");
       } else {
-        alert("Thank you for contributing! Your answer has been submitted.");
+        showSuccessToast("Thank you!", "Your answer has been submitted.");
       }
     },
   });
@@ -194,7 +261,8 @@ export default function Search() {
               >
                 <Text
                   className={`text-xs font-outfit-semi-bold ${
-                    getSourceBadgeColor(searchResult.source).split(" ")[1]
+                    getSourceBadgeColor(searchResult.source).split(" ")[1] ||
+                    "text-gray-700"
                   }`}
                 >
                   {getSourceLabel(searchResult.source)}
@@ -286,8 +354,31 @@ export default function Search() {
           </View>
         )}
 
+        {/* Show subscription required message */}
+        {currentStatus && !currentStatus.hasSubscription && (
+          <View className="items-center justify-center py-20 px-4">
+            <Ionicons name="card-outline" size={64} color="#3B82F6" />
+            <Text className="text-gray-900 text-xl font-outfit-bold mt-6 text-center">
+              Subscription Required
+            </Text>
+            <Text className="text-gray-600 text-base font-outfit-regular mt-3 text-center">
+              You need an active subscription to search. Choose a plan to get
+              started!
+            </Text>
+            <TouchableOpacity
+              className="bg-blue-500 rounded-xl py-4 px-8 mt-6"
+              onPress={() => router.push("/(tabs)/manage-subscriptions")}
+              activeOpacity={0.7}
+            >
+              <Text className="text-white text-base font-outfit-semi-bold">
+                Choose a Plan
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Show search history when no query or when typing */}
-        {!activeQuery && !isLoading && (
+        {!activeQuery && !isLoading && currentStatus?.hasSubscription && (
           <View>
             {searchHistory && searchHistory.length > 0 && (
               <View className="mb-6">
@@ -416,7 +507,7 @@ export default function Search() {
                       if (userAnswer.trim().length >= 10) {
                         submitAnswerMutation.mutate(userAnswer);
                       } else {
-                        alert("Answer must be at least 10 characters long");
+                        showErrorToast("Validation Error", "Answer must be at least 10 characters long");
                       }
                     }}
                     disabled={submitAnswerMutation.isPending}

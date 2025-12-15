@@ -5,9 +5,11 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ReactQueryProvider } from "../lib/react-query";
 import "./globals.css";
-import { Platform, StatusBar } from "react-native";
-import { useAuthStore } from "../store/auth-store";
-import * as NavigationBar from "expo-navigation-bar";
+import { StatusBar } from "expo-status-bar";
+import { AuthInitializer } from "../components/AuthInitializer";
+import { SubscriptionInitializer } from "../components/SubscriptionInitializer";
+import ToastManager from "toastify-react-native";
+import { toastConfig } from "@/utils/toast";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -20,23 +22,10 @@ export default function RootLayout() {
     "Outfit-ExtraBold": require("../assets/fonts/outfit/Outfit-ExtraBold.ttf"),
   });
 
-  const initialize = useAuthStore((state) => state.initialize);
-
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      NavigationBar.setBackgroundColorAsync("#ffffff");
-      NavigationBar.setButtonStyleAsync("light");
-    }
-  }, []);
-
   useEffect(() => {
     if (fontError) throw fontError;
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
-
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
 
   return (
     <SafeAreaProvider>
@@ -46,7 +35,10 @@ export default function RootLayout() {
             className="flex-1 bg-white"
             edges={["bottom", "left", "right"]}
           >
-            <StatusBar backgroundColor={"#fff"} barStyle={"dark-content"} />
+            <ToastManager config={toastConfig} />
+            <StatusBar style="dark" backgroundColor="transparent" translucent />
+            <AuthInitializer />
+            <SubscriptionInitializer />
             <Stack screenOptions={{ headerShown: false }} />
           </SafeAreaView>
         </ReactQueryProvider>

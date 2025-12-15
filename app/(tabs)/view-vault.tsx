@@ -21,6 +21,7 @@ import { useServices } from "../../hooks/useServices";
 import { Resource } from "../../services/resource.service";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
+import { showSuccessToast, showErrorToast } from "../../utils/toast";
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -97,10 +98,10 @@ export default function ViewVault() {
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
       queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
       
-      Alert.alert("Success", "Resource deleted successfully");
+      showSuccessToast("Success", "Resource deleted successfully");
     },
     onError: () => {
-      Alert.alert("Error", "Failed to delete resource");
+      showErrorToast("Error", "Failed to delete resource");
     },
   });
 

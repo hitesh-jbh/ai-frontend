@@ -11,7 +11,7 @@ export default function Community() {
       <ScreenHeader
         title="Community"
         showBackButton
-        onBackPress={() => router.push("/(tabs)/profile")}
+        onBackPress={() => router.push("/(tabs)/options")}
       />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>

@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useForm } from "react-hook-form";
@@ -17,6 +17,7 @@ import {
   type LoginFormData,
 } from "../../lib/validations/auth.schema";
 import { Ionicons } from "@expo/vector-icons";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
@@ -47,6 +48,7 @@ const Login = () => {
         // If profile fetch fails, use user data from login
         login(data.user, data.accessToken, data.refreshToken);
       }
+      showSuccessToast("Login Successful", "Welcome back!");
       router.replace("/(tabs)/home");
     },
     onError: (error: any) => {
@@ -65,7 +67,7 @@ const Login = () => {
         message = `Server error (${error.response.status}). Please try again.`;
       }
 
-      Alert.alert("Login Failed", message, [{ text: "OK" }]);
+      showErrorToast("Login Failed", message);
     },
   });
 

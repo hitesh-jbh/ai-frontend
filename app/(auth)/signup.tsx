@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useForm, Controller } from "react-hook-form";
@@ -17,6 +17,7 @@ import {
   type SignupFormData,
 } from "../../lib/validations/auth.schema";
 import { Ionicons } from "@expo/vector-icons";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -52,6 +53,7 @@ const Signup = () => {
         // If profile fetch fails, use user data from registration
         login(data.user, data.accessToken, data.refreshToken);
       }
+      showSuccessToast("Registration Successful", "Welcome to the community!");
       router.replace("/(tabs)/home");
     },
     onError: (error: any) => {
@@ -70,7 +72,7 @@ const Signup = () => {
         message = `Server error (${error.response.status}). Please try again.`;
       }
 
-      Alert.alert("Registration Failed", message, [{ text: "OK" }]);
+      showErrorToast("Registration Failed", message);
     },
   });
 

@@ -27,7 +27,7 @@ export default function Rewards() {
       <ScreenHeader
         title="Rewards"
         showBackButton
-        onBackPress={() => router.push("/(tabs)/profile")}
+        onBackPress={() => router.push("/(tabs)/options")}
       />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>

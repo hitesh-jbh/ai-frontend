@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { showSuccessToast, showErrorToast } from "../../utils/toast";
 
 const createVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
@@ -36,7 +37,7 @@ export default function CreateVault() {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
-      Alert.alert("Success", "Vault created successfully");
+      showSuccessToast("Success", "Vault created successfully");
       router.back();
     },
     onError: (error: any) => {
@@ -45,7 +46,7 @@ export default function CreateVault() {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to create vault. Please try again.";
-      Alert.alert("Error", errorMessage);
+      showErrorToast("Error", errorMessage);
     },
   });
 

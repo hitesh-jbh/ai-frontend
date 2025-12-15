@@ -69,7 +69,7 @@ export default function ViewResource() {
     try {
       await WebBrowser.openBrowserAsync(url);
     } catch (error) {
-      Alert.alert("Error", "Failed to open link");
+      showErrorToast("Error", "Failed to open link");
     }
   };
 

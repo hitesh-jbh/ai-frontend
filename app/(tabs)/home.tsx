@@ -18,6 +18,8 @@ import { useServices } from "../../hooks/useServices";
 import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
+import { ResponsiveText } from "@/utils/responsive-text";
+import { showErrorToast, showInfoToast, showSuccessToast } from "@/utils/toast";
 
 export default function Home() {
   const [profileImageError, setProfileImageError] = useState(false);
@@ -54,25 +56,27 @@ export default function Home() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <View
-        className="px-6 bg-white"
+        className="px-6"
         style={{
-          minHeight: 180,
+          minHeight: 182,
           justifyContent: "flex-end",
         }}
       >
         {/* Header */}
         <View className="flex-row justify-between items-center mb-4">
           <View className="flex-1">
-            <Text className="text-gray-900 text-4xl font-outfit-bold mb-1">
+            <Text
+              className={`text-gray-900 ${ResponsiveText.display} font-outfit-bold mb-1`}
+            >
               Connect
             </Text>
-            <Text className="text-gray-600 text-sm font-outfit-regular">
+            <Text className="text-gray-600 text-base font-outfit-regular">
               Trusted by creators across the globe.
             </Text>
           </View>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => router.push("/(tabs)/profile")}
+            onPress={() => router.push("/(tabs)/options")}
           >
             <View className="w-16 h-16 bg-gray-200 rounded-full items-center justify-center overflow-hidden">
               {normalizedProfilePicture && !profileImageError ? (

@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { showErrorToast, showSuccessToast } from "@/utils/toast";
 
 const editProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(255),
@@ -128,7 +129,7 @@ export default function EditProfile() {
       // Invalidate and refetch profile data
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.refetchQueries({ queryKey: ["profile"] });
-      Alert.alert("Success", "Profile updated successfully");
+      showSuccessToast("Success", "Profile updated successfully");
       router.back();
     },
     onError: (error: any) => {
@@ -136,7 +137,7 @@ export default function EditProfile() {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to update profile";
-      Alert.alert("Error", errorMessage);
+      showErrorToast("Error", errorMessage);
     },
   });
 
@@ -152,7 +153,7 @@ export default function EditProfile() {
       <ScreenHeader
         title="Edit Profile"
         showBackButton
-        onBackPress={() => router.push("/(tabs)/profile")}
+        onBackPress={() => router.push("/(tabs)/options")}
       />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -203,7 +204,7 @@ export default function EditProfile() {
                     multiline
                     numberOfLines={4}
                     style={{ minHeight: 80, textAlignVertical: "top" }}
-                    placeholder="Hi, i am a full stack developer 😊"
+                    placeholder="Hi, write about yourself.. 😊"
                     placeholderTextColor="#9CA3AF"
                   />
                 </View>

@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { showSuccessToast, showErrorToast, showInfoToast } from "../utils/toast";
 
 interface ToastOptions {
   title: string;
@@ -8,9 +8,9 @@ interface ToastOptions {
 
 export const toast = ({ title, description, variant = "default" }: ToastOptions) => {
   if (variant === "destructive") {
-    Alert.alert(title, description || "", [{ text: "OK" }]);
+    showErrorToast(title, description);
   } else {
-    Alert.alert(title, description || "", [{ text: "OK" }]);
+    showInfoToast(title, description);
   }
 };
 

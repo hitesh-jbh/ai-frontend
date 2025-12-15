@@ -23,9 +23,9 @@ const TabsLayout = () => {
           backgroundColor: "#FFFFFF",
           borderTopWidth: 0,
           borderTopColor: "#E5E7EB",
-          height: Platform.OS === "ios" ? 88 : 72,
-          paddingBottom: Platform.OS === "ios" ? 28 : 8,
-          paddingTop: 10,
+          height: 88,
+          paddingBottom: 28,
+          paddingTop: 12,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -133,21 +133,15 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
-        name="quizzes"
+        name="manage-subscriptions"
         options={{
           href: null, // Hide from tab bar
         }}
       />
       <Tabs.Screen
-        name="ad-management"
+        name="options"
         options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
+          title: "Options",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "menu" : "menu-outline"}

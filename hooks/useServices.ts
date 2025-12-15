@@ -7,6 +7,7 @@ import { createVaultService } from "../services/vault.service";
 import { createResourceService } from "../services/resource.service";
 import { createProfileService } from "../services/profile.service";
 import { createRewardService } from "../services/reward.service";
+import { createSubscriptionService } from "../services/subscription.service";
 
 export const useServices = () => {
   const axiosInstance = useAxiosPrivate();
@@ -20,6 +21,7 @@ export const useServices = () => {
       resource: createResourceService(axiosInstance),
       profile: createProfileService(axiosInstance),
       reward: createRewardService(axiosInstance),
+      subscription: createSubscriptionService(axiosInstance),
     }),
     [axiosInstance]
   );

@@ -1,5 +1,11 @@
 import React, { useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +14,7 @@ import { ProfilePictureUploader } from "../../components/ui/ProfilePictureUpload
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { Ionicons } from "@expo/vector-icons";
+import { showSuccessToast } from "@/utils/toast";
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -30,8 +37,8 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress }) => {
   );
 };
 
-export default function Profile() {
-  const { user, logout, setUser } = useAuthStore();
+export default function Options() {
+  const { user, logout, setUser, isLoading } = useAuthStore();
   const { profile } = useServices();
   const queryClient = useQueryClient();
 
@@ -67,16 +74,23 @@ export default function Profile() {
 
   const handleLogout = async () => {
     try {
-      // Clear all query cache
+      // Clear all React Query cache including subscription queries
       queryClient.clear();
-      // Logout and clear tokens
+      // Explicitly invalidate subscription queries to ensure they're cleared
+      queryClient.invalidateQueries({ queryKey: ["subscriptionStatus"] });
+      queryClient.removeQueries({ queryKey: ["subscriptionStatus"] });
       await logout();
+      showSuccessToast(
+        "Logout Successful",
+        "You have been logged out successfully"
+      );
       // Navigate to login
       router.replace("/(auth)/login");
     } catch (error) {
       console.error("Logout error:", error);
       // Still clear cache and navigate even if logout API call fails
       queryClient.clear();
+      queryClient.removeQueries({ queryKey: ["subscriptionStatus"] });
       router.replace("/(auth)/login");
     }
   };
@@ -98,7 +112,7 @@ export default function Profile() {
               size={120}
               editable={false}
             />
-            <Text className="text-gray-900 text-2xl font-outfit-bold mt-4 uppercase">
+            <Text className="text-gray-900 text-xl font-outfit-bold mt-4 uppercase">
               {displayUser?.name || "User"}
             </Text>
           </View>
@@ -109,6 +123,11 @@ export default function Profile() {
               icon="person-outline"
               label="Edit Profile"
               onPress={() => router.push("/(tabs)/edit-profile")}
+            />
+            <MenuItem
+              icon="card-outline"
+              label="Manage Subscriptions"
+              onPress={() => router.push("/(tabs)/manage-subscriptions")}
             />
             <MenuItem icon="mail-outline" label="Contact" onPress={() => {}} />
             <MenuItem
@@ -143,10 +162,16 @@ export default function Profile() {
             onPress={handleLogout}
             className="bg-red-500 rounded-3xl py-4 px-4 flex-row items-center justify-center mb-6"
             activeOpacity={0.7}
+            disabled={isLoading}
+            style={{ opacity: isLoading ? 0.5 : 1 }}
           >
             <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
             <Text className="text-white text-base font-outfit-semi-bold ml-2">
-              Logout
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                "Logout"
+              )}
             </Text>
           </TouchableOpacity>
         </View>

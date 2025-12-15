@@ -24,6 +24,10 @@ export const Input: React.FC<InputProps> = ({
       )}
       <View className="relative">
         <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          selectionColor={"#007AFF"} // app blue
           className={`bg-gray-100 rounded-lg px-4 py-4 text-gray-900 font-outfit-regular ${
             error ? "border border-red-500" : ""
           } ${rightIcon ? "pr-12" : ""}`}

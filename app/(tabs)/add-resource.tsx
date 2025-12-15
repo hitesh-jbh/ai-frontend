@@ -18,6 +18,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
+import { showSuccessToast, showErrorToast, showInfoToast } from "../../utils/toast";
 import * as ImagePicker from "expo-image-picker";
 
 const addResourceSchema = z
@@ -97,13 +98,13 @@ export default function AddResource() {
       } else if (resourceType === "pdf" || resourceType === "note") {
         // For now, we'll use image picker for PDFs too
         // In production, use expo-document-picker
-        Alert.alert(
+        showInfoToast(
           "Info",
           "File picker will be implemented with expo-document-picker"
         );
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick file");
+      showErrorToast("Error", "Failed to pick file");
     }
   };
 
@@ -174,7 +175,7 @@ export default function AddResource() {
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
       queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
       
-      Alert.alert("Success", "Resource created successfully");
+      showSuccessToast("Success", "Resource created successfully");
       router.back();
     },
     onError: (error: any) => {
@@ -182,13 +183,13 @@ export default function AddResource() {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to create resource";
-      Alert.alert("Error", errorMessage);
+      showErrorToast("Error", errorMessage);
     },
   });
 
   const onSubmit = async (data: AddResourceForm) => {
     if (!vaultId) {
-      Alert.alert("Error", "Vault ID is required");
+      showErrorToast("Error", "Vault ID is required");
       return;
     }
     createResourceMutation.mutate(data);

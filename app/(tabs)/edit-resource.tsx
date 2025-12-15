@@ -17,6 +17,7 @@ import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { showSuccessToast, showErrorToast, showInfoToast } from "../../utils/toast";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
@@ -85,13 +86,13 @@ export default function EditResource() {
       ) {
         // For PDFs and notes, file selection would require expo-document-picker
         // For now, show an alert
-        Alert.alert(
+        showInfoToast(
           "File Selection",
           "PDF and note file selection requires expo-document-picker. Please install it or use the web interface."
         );
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick file");
+      showErrorToast("Error", "Failed to pick file");
     }
   };
 
@@ -174,7 +175,7 @@ export default function EditResource() {
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
       queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
       
-      Alert.alert("Success", "Resource updated successfully");
+      showSuccessToast("Success", "Resource updated successfully");
       router.back();
     },
     onError: (error: any) => {
@@ -182,7 +183,7 @@ export default function EditResource() {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to update resource";
-      Alert.alert("Error", errorMessage);
+      showErrorToast("Error", errorMessage);
     },
   });
 

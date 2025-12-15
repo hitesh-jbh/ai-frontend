@@ -20,7 +20,11 @@ import { useServices } from "../../hooks/useServices";
 import { useSubscriptionStore } from "../../store/subscription-store";
 import { SearchResult } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
-import { showInfoToast, showErrorToast } from "../../utils/toast";
+import {
+  showInfoToast,
+  showErrorToast,
+  showSuccessToast,
+} from "../../utils/toast";
 
 export default function Search() {
   const params = useLocalSearchParams<{ query?: string }>();
@@ -124,9 +128,9 @@ export default function Search() {
       if (errorAny?.response?.status === 402) {
         // No subscription
         showInfoToast(
-          "Subscription Required",
+          "Hold on!",
           errorAny?.response?.data?.message ||
-            "You need an active subscription to search."
+            "To continue, please choose a plan.."
         );
         // Navigate after a short delay
         setTimeout(() => {
@@ -163,7 +167,10 @@ export default function Search() {
 
       // Show toast based on whether it was an update or new submission
       if (data?.isUpdate) {
-        showSuccessToast("Success", "Your answer has been updated successfully!");
+        showSuccessToast(
+          "Success",
+          "Your answer has been updated successfully!"
+        );
       } else {
         showSuccessToast("Thank you!", "Your answer has been submitted.");
       }
@@ -359,11 +366,10 @@ export default function Search() {
           <View className="items-center justify-center py-20 px-4">
             <Ionicons name="card-outline" size={64} color="#3B82F6" />
             <Text className="text-gray-900 text-xl font-outfit-bold mt-6 text-center">
-              Subscription Required
+              Hold on!
             </Text>
             <Text className="text-gray-600 text-base font-outfit-regular mt-3 text-center">
-              You need an active subscription to search. Choose a plan to get
-              started!
+              To continue, please choose a plan.
             </Text>
             <TouchableOpacity
               className="bg-blue-500 rounded-xl py-4 px-8 mt-6"
@@ -507,7 +513,10 @@ export default function Search() {
                       if (userAnswer.trim().length >= 10) {
                         submitAnswerMutation.mutate(userAnswer);
                       } else {
-                        showErrorToast("Validation Error", "Answer must be at least 10 characters long");
+                        showErrorToast(
+                          "Validation Error",
+                          "Answer must be at least 10 characters long"
+                        );
                       }
                     }}
                     disabled={submitAnswerMutation.isPending}

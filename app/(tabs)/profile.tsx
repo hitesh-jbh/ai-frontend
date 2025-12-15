@@ -126,16 +126,16 @@ export default function Profile() {
               label="Community"
               onPress={() => router.push("/(tabs)/community")}
             />
-            <MenuItem
+            {/* <MenuItem
               icon="school-outline"
               label="Quizzes"
               onPress={() => router.push("/(tabs)/quizzes")}
-            />
-            <MenuItem
+            /> */}
+            {/* <MenuItem
               icon="megaphone-outline"
               label="Ad Management"
               onPress={() => router.push("/(tabs)/ad-management")}
-            />
+            /> */}
           </View>
 
           {/* Logout Button */}

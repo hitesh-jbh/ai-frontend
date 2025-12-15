@@ -1,15 +1,10 @@
 import React from "react";
 import { TextInput, Text, View, TextInputProps } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  Control,
-  Controller,
-  FieldPath,
-  FieldValues,
-} from "react-hook-form";
+import { Control, Controller, FieldPath, FieldValues } from "react-hook-form";
 
 interface InputProps extends TextInputProps {
-  label: string;
+  label?: string;
   error?: string;
   rightIcon?: React.ReactNode;
 }
@@ -22,12 +17,14 @@ export const Input: React.FC<InputProps> = ({
 }) => {
   return (
     <View className="mb-4">
-      <Text className="text-gray-800 text-sm font-outfit-medium mb-2">
-        {label}
-      </Text>
+      {label && (
+        <Text className="text-gray-800 text-sm font-outfit-medium">
+          {label}
+        </Text>
+      )}
       <View className="relative">
         <TextInput
-          className={`bg-gray-100 rounded-lg px-4 py-3 text-gray-900 font-outfit-regular ${
+          className={`bg-gray-100 rounded-lg px-4 py-4 text-gray-900 font-outfit-regular ${
             error ? "border border-red-500" : ""
           } ${rightIcon ? "pr-12" : ""}`}
           placeholderTextColor="#9CA3AF"
@@ -48,7 +45,8 @@ export const Input: React.FC<InputProps> = ({
   );
 };
 
-interface ControlledInputProps<T extends FieldValues> extends Omit<InputProps, "value" | "onChangeText" | "error"> {
+interface ControlledInputProps<T extends FieldValues>
+  extends Omit<InputProps, "value" | "onChangeText" | "error"> {
   name: FieldPath<T>;
   control: Control<T>;
 }
@@ -62,7 +60,10 @@ export function ControlledInput<T extends FieldValues>({
     <Controller
       control={control}
       name={name}
-      render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+      render={({
+        field: { onChange, onBlur, value },
+        fieldState: { error },
+      }) => (
         <Input
           {...props}
           value={value}
@@ -74,4 +75,3 @@ export function ControlledInput<T extends FieldValues>({
     />
   );
 }
-

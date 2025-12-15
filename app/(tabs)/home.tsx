@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+} from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { SearchBar } from "../../components/ui/SearchBar";
 import { StatCard } from "../../components/ui/StatCard";
 import { TrendingBanner } from "../../components/home/TrendingBanner";
 import { AnalyticsChart } from "../../components/home/AnalyticsChart";
@@ -15,7 +20,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
 
 export default function Home() {
-  const [searchQuery, setSearchQuery] = useState("");
   const [profileImageError, setProfileImageError] = useState(false);
   const user = useAuthStore((state) => state.user);
   const { leaderboard, profile } = useServices();
@@ -46,15 +50,6 @@ export default function Home() {
   });
 
   const topEarners = topEarnersData?.entries || [];
-
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      router.push({
-        pathname: "/(tabs)/search",
-        params: { query: searchQuery.trim() },
-      });
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -104,7 +99,7 @@ export default function Home() {
                   }}
                 />
               ) : displayUser?.name ? (
-                <Text className="text-gray-600 font-outfit-semi-bold text-sm">
+                <Text className="text-gray-600 font-outfit-semi-bold text-2xl">
                   {displayUser.name.charAt(0).toUpperCase()}
                 </Text>
               ) : (
@@ -116,13 +111,24 @@ export default function Home() {
 
         {/* Search Bar */}
         <View className="mb-6">
-          <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSearch={handleSearch}
-            showSuggestions={true}
-            debounceMs={300}
-          />
+          <TouchableWithoutFeedback
+            onPress={() => router.push("/(tabs)/search")}
+          >
+            <View className="relative">
+              <View
+                className="bg-gray-100 rounded-3xl flex-row items-center px-4"
+                style={{ paddingVertical: 16 }}
+              >
+                <Ionicons name="search" size={20} color="#6B7280" />
+                <Text
+                  className="flex-1 ml-3 text-gray-500 font-outfit-regular text-base"
+                  style={{ lineHeight: 20 }}
+                >
+                  Search for knowledge vault..
+                </Text>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
       </View>
 
@@ -130,6 +136,8 @@ export default function Home() {
         className="flex-1"
         contentContainerClassName="px-6 pb-20"
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Trending Banner */}
         <TrendingBanner

@@ -16,28 +16,16 @@ export interface SearchRequest {
   offset?: number;
 }
 
-export interface Resource {
-  id: string;
-  title: string;
-  description?: string;
-  type: "pdf" | "video" | "note" | "link";
-  subject?: string;
-  grade?: string;
-  area?: string;
-  language?: string;
-  tags?: string[];
-  url?: string;
-  createdAt: string;
-}
-
+// NEW: Updated SearchResult to match new backend API
 export interface SearchResult {
-  resources: (Resource & {
-    relevanceScore?: number;
-    popularityScore?: number;
-  })[];
-  total: number;
+  answer: string;
+  source: "cache" | "web" | "competitive" | "community" | "free_ai" | "paid_ai";
+  qualityScore: number;
+  upvotes?: number;
+  tokensUsed: number;
+  layer: string;
   query: string;
-  refinedQuery?: string;
+  answerId?: string; // For upvoting community answers
 }
 
 export interface SearchSuggestion {
@@ -57,6 +45,8 @@ export interface SearchHistoryItem {
   id: string;
   query: string;
   resultCount: number;
+  answerLayer?: "cache" | "web" | "competitive" | "community" | "free_ai" | "paid_ai";
+  tokensUsed: number;
   createdAt: string;
 }
 
@@ -66,13 +56,34 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+// NEW: Community answer interfaces
+export interface SubmitCommunityAnswerRequest {
+  query: string;
+  answer: string;
+  filters?: Record<string, any>;
+}
+
+export interface SubmitCommunityAnswerResponse {
+  answerId: string;
+  isUpdate: boolean;
+}
+
+export interface UpvoteAnswerResponse {
+  upvoted: boolean;
+}
+
 export const createSearchService = (axiosInstance: AxiosInstance) => ({
   async search(data: SearchRequest): Promise<SearchResult> {
-    const response = await axiosInstance.post<ApiResponse<SearchResult>>(
-      "/search",
-      data
-    );
-    return response.data.data;
+    try {
+      const response = await axiosInstance.post<ApiResponse<SearchResult>>(
+        "/search",
+        data
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error("SearchService error:", error.response?.data || error.message);
+      throw error;
+    }
   },
 
   async getSearchHistory(limit: number = 20): Promise<SearchHistoryItem[]> {
@@ -100,6 +111,23 @@ export const createSearchService = (axiosInstance: AxiosInstance) => ({
   async getFilterOptions(): Promise<FilterOptions> {
     const response = await axiosInstance.get<ApiResponse<FilterOptions>>(
       "/search/filter-options"
+    );
+    return response.data.data;
+  },
+
+  // NEW: Community answer methods
+  async submitCommunityAnswer(
+    data: SubmitCommunityAnswerRequest
+  ): Promise<SubmitCommunityAnswerResponse> {
+    const response = await axiosInstance.post<
+      ApiResponse<SubmitCommunityAnswerResponse>
+    >("/search/community/answer", data);
+    return response.data.data;
+  },
+
+  async upvoteAnswer(answerId: string): Promise<UpvoteAnswerResponse> {
+    const response = await axiosInstance.post<ApiResponse<UpvoteAnswerResponse>>(
+      `/search/community/answer/${answerId}/upvote`
     );
     return response.data.data;
   },

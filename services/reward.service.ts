@@ -26,8 +26,8 @@ export const createRewardService = (axiosInstance: AxiosInstance) => ({
   },
 
   async getUserPoints(): Promise<UserPoints> {
-    const response = await axiosInstance.get<ApiResponse<{ points: UserPoints }>>("/rewards/points");
-    return response.data.data.points;
+    const response = await axiosInstance.get<ApiResponse<UserPoints>>("/rewards/points");
+    return response.data.data;
   },
 });
 

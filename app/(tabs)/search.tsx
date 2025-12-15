@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,74 +6,145 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Modal,
-  FlatList,
+  TextInput,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SearchBar } from "../../components/ui/SearchBar";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
-import { Resource } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function Search() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [searchQuery, setSearchQuery] = useState(params.query || "");
-  const [filters, setFilters] = useState<{
-    subject?: string;
-    grade?: string;
-    language?: string;
-    type?: "pdf" | "video" | "note" | "link";
-  }>({});
-  const [showFilters, setShowFilters] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState(params.query || "");
+  const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
+  const [userAnswer, setUserAnswer] = useState("");
   const { search } = useServices();
+  const queryClient = useQueryClient();
 
-  // Fetch filter options
-  const { data: filterOptions } = useQuery({
-    queryKey: ["filterOptions"],
-    queryFn: () => search.getFilterOptions(),
-    staleTime: 300000, // Cache for 5 minutes
+  // Update search query when params change - only once
+  useEffect(() => {
+    if (
+      params.query !== undefined &&
+      params.query.trim() !== searchQuery.trim()
+    ) {
+      setSearchQuery(params.query.trim());
+      setDebouncedQuery(params.query.trim());
+    }
+  }, [params.query]); // Only depend on params.query, not searchQuery to avoid loops
+
+  // Debounce search query - 500ms delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Use memoized active query to prevent unnecessary re-renders
+  const activeQuery = useMemo(() => {
+    return debouncedQuery.trim();
+  }, [debouncedQuery]);
+
+  // Fetch search history
+  const { data: searchHistory } = useQuery({
+    queryKey: ["searchHistory"],
+    queryFn: () => search.getSearchHistory(10),
+    staleTime: 60000, // Cache for 1 minute
   });
 
-  // Fetch search results
+  // Fetch search results - only trigger when activeQuery changes (after debounce)
   const {
-    data: searchResults,
+    data: searchResult,
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["search", searchQuery, filters],
-    queryFn: () =>
-      search.search({
-        query: searchQuery,
-        filters,
+    queryKey: ["search", activeQuery],
+    queryFn: async () => {
+      if (!activeQuery) {
+        throw new Error("Query is required");
+      }
+      return search.search({
+        query: activeQuery,
         limit: 20,
         offset: 0,
-      }),
-    enabled: !!searchQuery && searchQuery.length > 0,
+      });
+    },
+    enabled: activeQuery.length > 0,
+    retry: 1,
+    staleTime: 30000, // Cache results for 30 seconds to prevent duplicate calls
   });
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      refetch();
+  // Submit community answer mutation
+  const submitAnswerMutation = useMutation({
+    mutationFn: (answer: string) =>
+      search.submitCommunityAnswer({
+        query: activeQuery,
+        answer,
+      }),
+    onSuccess: (data: any) => {
+      setShowSubmitAnswer(false);
+      setUserAnswer("");
+      queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
+
+      // Show alert based on whether it was an update or new submission
+      if (data?.isUpdate) {
+        alert("Your answer has been updated successfully!");
+      } else {
+        alert("Thank you for contributing! Your answer has been submitted.");
+      }
+    },
+  });
+
+  // Upvote answer mutation
+  const upvoteMutation = useMutation({
+    mutationFn: (answerId: string) => search.upvoteAnswer(answerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
+    },
+  });
+
+  const handleSuggestionSelect = (suggestion: string) => {
+    const trimmed = suggestion.trim();
+    if (trimmed) {
+      setSearchQuery(trimmed);
+      // Debounce will handle the search automatically
     }
   };
 
-  const handleSuggestionSelect = (suggestion: string) => {
-    setSearchQuery(suggestion);
-    refetch();
+  const handleHistorySelect = (historyItem: { query: string }) => {
+    setSearchQuery(historyItem.query);
+    // Debounce will handle the search automatically
   };
 
-  const clearFilter = (key: keyof typeof filters) => {
-    setFilters((prev) => {
-      const newFilters = { ...prev };
-      delete newFilters[key];
-      return newFilters;
-    });
+  const getSourceBadgeColor = (source: string) => {
+    const colors: Record<string, string> = {
+      cache: "bg-green-100 text-green-700",
+      competitive: "bg-blue-100 text-blue-700",
+      community: "bg-purple-100 text-purple-700",
+      paid_ai: "bg-orange-100 text-orange-700",
+      web: "bg-gray-100 text-gray-700",
+    };
+    return colors[source] || "bg-gray-100 text-gray-700";
   };
 
-  const activeFiltersCount = Object.keys(filters).filter((key) => filters[key as keyof typeof filters]).length;
+  const getSourceLabel = (source: string) => {
+    const labels: Record<string, string> = {
+      cache: "Cached",
+      competitive: "AI-Free Answer",
+      community: "Community",
+      paid_ai: "AI Generated",
+      web: "Web Search",
+    };
+    return labels[source] || source;
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -83,277 +154,12 @@ export default function Search() {
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSearch={handleSearch}
             onSuggestionSelect={handleSuggestionSelect}
-            placeholder="Search for knowledge vault.."
+            placeholder="Ask a question..."
             showSuggestions={true}
           />
         </View>
-
-        {/* Filter Button */}
-        <TouchableOpacity
-          className="flex-row items-center mt-3 self-start"
-          onPress={() => setShowFilters(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="filter" size={18} color="#3B82F6" />
-          <Text className="text-blue-600 text-sm font-outfit-semi-bold ml-2">
-            Filters
-          </Text>
-          {activeFiltersCount > 0 && (
-            <View className="bg-blue-500 rounded-full px-2 py-0.5 ml-2">
-              <Text className="text-white text-xs font-outfit-semi-bold">
-                {activeFiltersCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Active Filters */}
-        {activeFiltersCount > 0 && (
-          <View className="flex-row flex-wrap gap-2 mt-3">
-            {filters.subject && (
-              <View className="bg-blue-100 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-blue-700 text-xs font-outfit-regular">
-                  Subject: {filters.subject}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => clearFilter("subject")}
-                  className="ml-2"
-                >
-                  <Ionicons name="close-circle" size={16} color="#3B82F6" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.grade && (
-              <View className="bg-blue-100 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-blue-700 text-xs font-outfit-regular">
-                  Grade: {filters.grade}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => clearFilter("grade")}
-                  className="ml-2"
-                >
-                  <Ionicons name="close-circle" size={16} color="#3B82F6" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.language && (
-              <View className="bg-blue-100 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-blue-700 text-xs font-outfit-regular">
-                  Language: {filters.language}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => clearFilter("language")}
-                  className="ml-2"
-                >
-                  <Ionicons name="close-circle" size={16} color="#3B82F6" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.type && (
-              <View className="bg-blue-100 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-blue-700 text-xs font-outfit-regular">
-                  Type: {filters.type}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => clearFilter("type")}
-                  className="ml-2"
-                >
-                  <Ionicons name="close-circle" size={16} color="#3B82F6" />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
       </View>
-
-      {/* Filter Modal */}
-      <Modal
-        visible={showFilters}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-3xl p-6 max-h-[80%]">
-            <View className="flex-row items-center justify-between mb-6">
-              <Text className="text-gray-900 text-xl font-outfit-bold">
-                Filters
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowFilters(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Subject Filter */}
-              <View className="mb-6">
-                <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
-                  Subject
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {filterOptions?.subjects.map((subject) => (
-                    <TouchableOpacity
-                      key={subject}
-                      className={`rounded-full px-4 py-2 border ${
-                        filters.subject === subject
-                          ? "bg-blue-500 border-blue-500"
-                          : "bg-white border-gray-300"
-                      }`}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          subject: prev.subject === subject ? undefined : subject,
-                        }))
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        className={`text-sm font-outfit-regular ${
-                          filters.subject === subject
-                            ? "text-white"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {subject}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Grade Filter */}
-              <View className="mb-6">
-                <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
-                  Grade
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {filterOptions?.grades.map((grade) => (
-                    <TouchableOpacity
-                      key={grade}
-                      className={`rounded-full px-4 py-2 border ${
-                        filters.grade === grade
-                          ? "bg-blue-500 border-blue-500"
-                          : "bg-white border-gray-300"
-                      }`}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          grade: prev.grade === grade ? undefined : grade,
-                        }))
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        className={`text-sm font-outfit-regular ${
-                          filters.grade === grade
-                            ? "text-white"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {grade}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Language Filter */}
-              <View className="mb-6">
-                <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
-                  Language
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {filterOptions?.languages.map((language) => (
-                    <TouchableOpacity
-                      key={language}
-                      className={`rounded-full px-4 py-2 border ${
-                        filters.language === language
-                          ? "bg-blue-500 border-blue-500"
-                          : "bg-white border-gray-300"
-                      }`}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          language:
-                            prev.language === language ? undefined : language,
-                        }))
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        className={`text-sm font-outfit-regular ${
-                          filters.language === language
-                            ? "text-white"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {language}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Type Filter */}
-              <View className="mb-6">
-                <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
-                  Resource Type
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {["pdf", "video", "note", "link"].map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      className={`rounded-full px-4 py-2 border ${
-                        filters.type === type
-                          ? "bg-blue-500 border-blue-500"
-                          : "bg-white border-gray-300"
-                      }`}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          type: prev.type === type ? undefined : (type as any),
-                        }))
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        className={`text-sm font-outfit-regular capitalize ${
-                          filters.type === type
-                            ? "text-white"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Apply Button */}
-              <TouchableOpacity
-                className="bg-blue-500 rounded-lg py-4 items-center mt-4"
-                onPress={() => {
-                  setShowFilters(false);
-                  if (searchQuery.trim()) {
-                    refetch();
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text className="text-white text-base font-outfit-semi-bold">
-                  Apply Filters
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
         {isLoading && (
@@ -377,107 +183,259 @@ export default function Search() {
           </View>
         )}
 
-        {searchResults && !isLoading && (
-          <>
-            <View className="mb-4">
-              <Text className="text-gray-900 text-lg font-outfit-semi-bold">
-                {searchResults.total} results found
-              </Text>
-              {searchResults.refinedQuery && (
-                <Text className="text-gray-600 text-sm font-outfit-regular mt-1">
-                  Showing results for: "{searchResults.refinedQuery}"
+        {searchResult && !isLoading && (
+          <View className="mt-4">
+            {/* Source Badge */}
+            <View className="flex-row items-center justify-between mb-3">
+              <View
+                className={`rounded-full px-3 py-1.5 ${getSourceBadgeColor(
+                  searchResult.source
+                )}`}
+              >
+                <Text
+                  className={`text-xs font-outfit-semi-bold ${
+                    getSourceBadgeColor(searchResult.source).split(" ")[1]
+                  }`}
+                >
+                  {getSourceLabel(searchResult.source)}
                 </Text>
+              </View>
+              {searchResult.qualityScore > 0 && (
+                <View className="flex-row items-center">
+                  <Ionicons name="star" size={18} color="#F59E0B" />
+                  <Text className="text-gray-700 text-sm font-outfit-semi-bold ml-1">
+                    {Math.round(searchResult.qualityScore * 100)}%
+                  </Text>
+                </View>
               )}
             </View>
 
-            {searchResults.resources.length === 0 ? (
+            {/* Answer Text - Better formatted */}
+            <View className="bg-gray-50 rounded-2xl p-5 mb-4">
+              <Text className="text-gray-900 text-lg font-outfit-regular leading-7">
+                {searchResult.answer}
+              </Text>
+            </View>
+
+            {/* Metadata - Cleaner */}
+            <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100">
+              <View className="flex-row items-center gap-4">
+                {searchResult.upvotes !== undefined &&
+                  searchResult.upvotes > 0 && (
+                    <View className="flex-row items-center">
+                      <Ionicons name="thumbs-up" size={18} color="#6B7280" />
+                      <Text className="text-gray-700 text-sm font-outfit-regular ml-1">
+                        {searchResult.upvotes} upvotes
+                      </Text>
+                    </View>
+                  )}
+                {searchResult.tokensUsed > 0 && (
+                  <View className="flex-row items-center">
+                    <Ionicons name="flash" size={16} color="#6B7280" />
+                    <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
+                      {searchResult.tokensUsed} tokens
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View className="flex-row gap-3">
+              {searchResult.source === "community" && searchResult.answerId && (
+                <TouchableOpacity
+                  className="flex-1 bg-purple-500 rounded-xl py-3.5 items-center shadow-sm"
+                  onPress={() => {
+                    upvoteMutation.mutate(searchResult.answerId!);
+                  }}
+                  disabled={upvoteMutation.isPending}
+                  activeOpacity={0.8}
+                >
+                  <View className="flex-row items-center">
+                    <Ionicons name="thumbs-up" size={20} color="#FFFFFF" />
+                    <Text className="text-white text-base font-outfit-semi-bold ml-2">
+                      {upvoteMutation.isPending ? "..." : "Upvote"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                className="flex-1 bg-blue-500 rounded-xl py-3.5 items-center shadow-sm"
+                onPress={() => setShowSubmitAnswer(true)}
+                activeOpacity={0.8}
+              >
+                <View className="flex-row items-center">
+                  <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                  <Text className="text-white text-base font-outfit-semi-bold ml-2">
+                    Contribute Answer
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Help Text */}
+            <View className="mt-4 p-3 bg-blue-50 rounded-xl justify-center gap-2">
+              <Text className="font-outfit-semi-bold text-blue-800 text-base">
+                💡 Contribute Answer:
+              </Text>
+              <Text className="text-blue-800 text-sm font-outfit-regular pl-5">
+                Share your knowledge! Your answer can help others and may appear
+                in future searches.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Show search history when no query or when typing */}
+        {!activeQuery && !isLoading && (
+          <View>
+            {searchHistory && searchHistory.length > 0 && (
+              <View className="mb-6">
+                <View className="flex-row items-center justify-between mb-4">
+                  <Text className="text-gray-900 text-lg font-outfit-semi-bold">
+                    Recent Searches
+                  </Text>
+                  <Ionicons name="time-outline" size={20} color="#6B7280" />
+                </View>
+                <View>
+                  {searchHistory.map((item, index) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      className={`bg-gray-50 rounded-xl p-4 flex-row items-center justify-between ${
+                        index > 0 ? "mt-2" : ""
+                      }`}
+                      onPress={() => handleHistorySelect(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View className="flex-1">
+                        <Text className="text-gray-900 text-base font-outfit-regular">
+                          {item.query}
+                        </Text>
+                        <View className="flex-row items-center mt-1">
+                          {item.resultCount > 0 && (
+                            <Text className="text-gray-500 text-xs font-outfit-regular mr-3">
+                              {item.resultCount} results
+                            </Text>
+                          )}
+                          <Text className="text-gray-400 text-xs font-outfit-regular">
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {(!searchHistory || searchHistory.length === 0) && (
               <View className="items-center justify-center py-20">
                 <Ionicons name="search" size={48} color="#9CA3AF" />
                 <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
-                  No results found
+                  Start searching
                 </Text>
                 <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-                  Try a different search query or adjust your filters
+                  Enter a question to get an AI-powered answer
                 </Text>
               </View>
-            ) : (
-              <View className="gap-4">
-                {searchResults.resources.map((resource: Resource) => (
-                  <TouchableOpacity
-                    key={resource.id}
-                    className="bg-white border border-gray-200 rounded-lg p-4"
-                    activeOpacity={0.7}
-                    onPress={() =>
-                      router.push(`/(tabs)/view-resource?id=${resource.id}`)
-                    }
-                  >
-                    <View className="flex-row items-start mb-2">
-                      <View className="bg-blue-100 rounded-lg p-2 mr-3">
-                        <Ionicons
-                          name={
-                            resource.type === "pdf"
-                              ? "document-text"
-                              : resource.type === "video"
-                                ? "videocam"
-                                : resource.type === "note"
-                                  ? "document"
-                                  : "link"
-                          }
-                          size={20}
-                          color="#3B82F6"
-                        />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-gray-900 text-base font-outfit-semi-bold mb-1">
-                          {resource.title}
-                        </Text>
-                        {resource.description && (
-                          <Text
-                            className="text-gray-600 text-sm font-outfit-regular"
-                            numberOfLines={2}
-                          >
-                            {resource.description}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                    {(resource.subject || resource.area) && (
-                      <View className="flex-row flex-wrap gap-2 mt-2">
-                        {resource.subject && (
-                          <View className="bg-gray-100 rounded-full px-3 py-1">
-                            <Text className="text-gray-700 text-xs font-outfit-regular">
-                              {resource.subject}
-                            </Text>
-                          </View>
-                        )}
-                        {resource.area && (
-                          <View className="bg-gray-100 rounded-full px-3 py-1">
-                            <Text className="text-gray-700 text-xs font-outfit-regular">
-                              {resource.area}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
             )}
-          </>
-        )}
-
-        {!searchQuery && !isLoading && (
-          <View className="items-center justify-center py-20">
-            <Ionicons name="search" size={48} color="#9CA3AF" />
-            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
-              Start searching
-            </Text>
-            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-              Enter a search query to find knowledge vaults
-            </Text>
           </View>
         )}
       </ScrollView>
+
+      {/* Submit Answer Modal */}
+      <Modal
+        visible={showSubmitAnswer}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowSubmitAnswer(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-center items-center px-4"
+          activeOpacity={1}
+          onPress={() => setShowSubmitAnswer(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 500 }}
+          >
+            <View className="bg-white rounded-2xl shadow-2xl">
+              {/* Header */}
+              <View className="p-6 border-b border-gray-200">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-gray-900 text-xl font-outfit-bold">
+                    Contribute Answer
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowSubmitAnswer(false);
+                      setUserAnswer("");
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={24} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Content with KeyboardAwareScrollView */}
+              <KeyboardAwareScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                // bottomOffset={20}
+              >
+                <View className="p-6">
+                  <View className="mb-4">
+                    <Text className="text-gray-700 text-sm font-outfit-regular mb-2">
+                      Question: {searchQuery}
+                    </Text>
+                    <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
+                      Your Answer
+                    </Text>
+                    <TextInput
+                      multiline
+                      numberOfLines={8}
+                      value={userAnswer}
+                      textAlignVertical="top"
+                      onChangeText={setUserAnswer}
+                      placeholderTextColor="#9CA3AF"
+                      placeholder="Enter your answer here..."
+                      className="border border-gray-300 rounded-lg p-4 min-h-[200px] text-gray-900 text-base font-outfit-regular"
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    className="bg-blue-500 rounded-lg py-4 items-center"
+                    onPress={() => {
+                      if (userAnswer.trim().length >= 10) {
+                        submitAnswerMutation.mutate(userAnswer);
+                      } else {
+                        alert("Answer must be at least 10 characters long");
+                      }
+                    }}
+                    disabled={submitAnswerMutation.isPending}
+                    activeOpacity={0.7}
+                  >
+                    {submitAnswerMutation.isPending ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text className="text-white text-base font-outfit-semi-bold">
+                        Submit Answer
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAwareScrollView>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }

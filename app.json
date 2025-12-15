@@ -2,7 +2,7 @@
   "expo": {
     "name": "Connect",
     "slug": "connect-knowledge-vault",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "basicnativesetup",
@@ -45,9 +45,6 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    },
-    "extra": {
-      "apiUrl": "https://r2zjcv4s-8080.inc1.devtunnels.ms/api"
     }
   }
 }

@@ -107,7 +107,7 @@ export const authService = {
       throw new Error("No refresh token available");
     }
 
-    console.log("Attempting to refresh token...");
+    console.log("Refreshing JWT Token");
 
     try {
       // Use axiosRefreshInstance which doesn't have interceptors
@@ -132,7 +132,7 @@ export const authService = {
         console.warn("No new refresh token provided, keeping existing one");
       }
 
-      console.log("Tokens refreshed and saved successfully");
+      console.log("JWT Token refreshed");
 
       return {
         data: {

@@ -158,9 +158,22 @@ export default function EditResource() {
       return resource.updateResource(id!, updateData);
     },
     onSuccess: () => {
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ["resources"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
       queryClient.invalidateQueries({ queryKey: ["resource", id] });
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
+      
+      // Invalidate vault resources (need to get vaultId from resource data)
+      queryClient.invalidateQueries({ queryKey: ["vaultResources"] });
+      
+      // Invalidate leaderboard and analytics queries
+      queryClient.invalidateQueries({ queryKey: ["topEarners"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["userRank"] });
+      queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
+      
       Alert.alert("Success", "Resource updated successfully");
       router.back();
     },

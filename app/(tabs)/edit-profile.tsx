@@ -168,7 +168,7 @@ export default function EditProfile() {
           </View>
 
           {/* Name Field */}
-          <View className="mb-6">
+          <View className="mb-2">
             <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
               Name <Text className="text-red-500">*</Text>
             </Text>

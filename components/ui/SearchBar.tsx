@@ -6,6 +6,7 @@ import {
   FlatList,
   Text,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -35,8 +36,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const [isSelectingSuggestion, setIsSelectingSuggestion] = useState(false);
   const { search } = useServices();
 
-  // Debounce the query for suggestions
+  // Debounce the query for suggestions - only update if value actually changed
   useEffect(() => {
+    if (value === debouncedQuery) return; // Skip if already the same
+
     const timer = setTimeout(() => {
       setDebouncedQuery(value);
     }, debounceMs);
@@ -44,12 +47,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     return () => clearTimeout(timer);
   }, [value, debounceMs]);
 
-  // Fetch suggestions
+  // Fetch suggestions - only when dropdown is shown and query is long enough
   const { data: suggestions, isLoading: isLoadingSuggestions } = useQuery({
     queryKey: ["searchSuggestions", debouncedQuery],
     queryFn: async () => {
+      if (debouncedQuery.length < 2) return [];
       try {
-        const result = await search.getSuggestions(debouncedQuery, 8);
+        const result = await search.getSuggestions(debouncedQuery, 4);
         return result || [];
       } catch (error) {
         console.error("Error fetching suggestions:", error);
@@ -57,22 +61,27 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       }
     },
     enabled: showSuggestions && debouncedQuery.length >= 2 && showDropdown,
-    staleTime: 5000,
+    staleTime: 10000, // Cache for 10 seconds
+    gcTime: 60000, // Keep in cache for 1 minute
   });
 
   const handleFocus = () => {
     if (showSuggestions && value.length >= 2) {
+      setShowDropdown(true);
+    } else if (showSuggestions && debouncedQuery.length >= 2) {
+      // Show dropdown if we have debounced query even if current value is short
       setShowDropdown(true);
     }
   };
 
   const handleBlur = () => {
     // Delay to allow suggestion selection - onPressIn sets the flag before blur
+    // Increase delay when keyboard is visible to ensure suggestions are clickable
     setTimeout(() => {
       if (!isSelectingSuggestion) {
         setShowDropdown(false);
       }
-    }, 300);
+    }, 500);
   };
 
   const handleSuggestionPress = (suggestion: string) => {
@@ -135,9 +144,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           value={value}
           onChangeText={(text) => {
             onChangeText(text);
+            // Show dropdown when user types (will be debounced for API calls)
             if (showSuggestions && text.length >= 2) {
               setShowDropdown(true);
-            } else {
+            } else if (text.length < 2) {
               setShowDropdown(false);
             }
           }}
@@ -145,20 +155,32 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
           returnKeyType="search"
+          blurOnSubmit={false}
         />
         {isLoadingSuggestions && showDropdown && (
           <ActivityIndicator size="small" color="#3B82F6" />
         )}
         {value.length > 0 && !isLoadingSuggestions && (
-          <TouchableOpacity
-            onPress={() => {
-              onChangeText("");
-              setShowDropdown(false);
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-          </TouchableOpacity>
+          <>
+            {onSearch && (
+              <TouchableOpacity
+                onPress={onSearch}
+                activeOpacity={0.7}
+                className="mr-2"
+              >
+                <Ionicons name="search" size={20} color="#3B82F6" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => {
+                onChangeText("");
+                setShowDropdown(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -167,7 +189,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         showDropdown &&
         suggestions &&
         suggestions.length > 0 && (
-          <View className="absolute top-full mt-2 left-0 right-0 bg-white rounded-2xl shadow-lg border border-gray-200 z-50 max-h-64">
+          <View
+            className="absolute top-full mt-2 left-0 right-0 bg-white rounded-2xl shadow-lg border border-gray-200 max-h-64"
+            style={{
+              zIndex: 9999,
+              elevation: Platform.OS === "android" ? 10 : 0,
+            }}
+          >
             <FlatList
               data={suggestions}
               keyExtractor={(item, index) => `${item.query}-${index}`}
@@ -175,8 +203,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 <TouchableOpacity
                   className="flex-row items-center px-4 py-3 border-b border-gray-100"
                   activeOpacity={0.7}
-                  onPressIn={() => setIsSelectingSuggestion(true)}
-                  onPress={() => handleSuggestionPress(item.query)}
+                  onPressIn={() => {
+                    setIsSelectingSuggestion(true);
+                  }}
+                  onPress={() => {
+                    handleSuggestionPress(item.query);
+                  }}
                 >
                   <Ionicons
                     name={getSuggestionIcon(item.type) as any}
@@ -198,6 +230,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               )}
               scrollEnabled={true}
               nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
             />
           </View>
         )}

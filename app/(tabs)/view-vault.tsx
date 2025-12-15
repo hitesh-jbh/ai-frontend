@@ -83,8 +83,20 @@ export default function ViewVault() {
   const deleteResourceMutation = useMutation({
     mutationFn: (resourceId: string) => resource.deleteResource(resourceId),
     onSuccess: () => {
+      // Invalidate all related queries
+      queryClient.invalidateQueries({ queryKey: ["resources"] });
+      queryClient.invalidateQueries({ queryKey: ["allResources"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResources", id] });
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["vault", id] });
+      
+      // Invalidate leaderboard and analytics queries
+      queryClient.invalidateQueries({ queryKey: ["topEarners"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["userRank"] });
+      queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
+      
       Alert.alert("Success", "Resource deleted successfully");
     },
     onError: () => {
@@ -118,7 +130,7 @@ export default function ViewVault() {
           <Image
             source={{ uri: item.fileUrl }}
             className="w-16 h-16 rounded-lg mr-3"
-            resizeMode="cover"
+            contentFit="cover"
           />
         ) : (
           <View className="w-16 h-16 bg-gray-200 rounded-lg mr-3 items-center justify-center">
@@ -286,4 +298,3 @@ export default function ViewVault() {
     </SafeAreaView>
   );
 }
-

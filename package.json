@@ -1,7 +1,7 @@
 {
-  "name": "basic-native-setup",
+  "name": "connect-knowledge-vault",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "baseline-browser-mapping": "^2.9.5",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

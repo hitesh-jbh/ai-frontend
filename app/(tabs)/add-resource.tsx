@@ -155,10 +155,25 @@ export default function AddResource() {
       // Return the created resource (fileUrl will be updated by the upload endpoint)
       return createdResource;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ["resources"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
+      
+      // Invalidate vault-specific queries
+      if (vaultId) {
+        queryClient.invalidateQueries({ queryKey: ["vaultResources", vaultId] });
+        queryClient.invalidateQueries({ queryKey: ["vault", vaultId] });
+      }
+      
+      // Invalidate leaderboard and analytics queries
+      queryClient.invalidateQueries({ queryKey: ["topEarners"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["userRank"] });
+      queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
+      
       Alert.alert("Success", "Resource created successfully");
       router.back();
     },

@@ -34,6 +34,7 @@ export default function CreateVault() {
     mutationFn: (data: CreateVaultForm) => vault.createVault(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
       Alert.alert("Success", "Vault created successfully");
       router.back();

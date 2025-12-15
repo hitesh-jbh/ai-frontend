@@ -198,6 +198,16 @@ export default function Vaults() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["vaultResources"] });
+      queryClient.invalidateQueries({ queryKey: ["resources"] });
+      queryClient.invalidateQueries({ queryKey: ["allResources"] });
+      
+      // Invalidate leaderboard and analytics queries
+      queryClient.invalidateQueries({ queryKey: ["topEarners"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["userRank"] });
+      queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
+      
       Alert.alert(
         "Success",
         "Vault and all its resources deleted successfully"

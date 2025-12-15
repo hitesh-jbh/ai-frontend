@@ -37,7 +37,7 @@ const useAxiosPrivate = () => {
           originalRequest._retry = true;
 
           try {
-            console.log("Token expired, attempting to refresh...");
+            console.log("JWTToken expired");
 
             // Don't clear query client here - we might succeed in refreshing
             const { data, status } = await authService.refreshToken();

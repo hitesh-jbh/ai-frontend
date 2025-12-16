@@ -20,6 +20,7 @@ interface SearchBarProps {
   placeholder?: string;
   showSuggestions?: boolean;
   debounceMs?: number;
+  inputRef?: React.RefObject<TextInput | null>;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -30,6 +31,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = "Search for knowledge vault..",
   showSuggestions = true,
   debounceMs = 300,
+  inputRef,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(value);
@@ -96,14 +98,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       setIsSelectingSuggestion(false);
     }, 400);
 
-    // Trigger callbacks with a small delay to ensure text is updated
+    // Trigger callback with a small delay to ensure text is updated
     setTimeout(() => {
       if (onSuggestionSelect) {
         onSuggestionSelect(suggestion);
       }
-      if (onSearch) {
-        onSearch();
-      }
+      // Don't auto-trigger search - user needs to click search button
     }, 100);
   };
 
@@ -138,6 +138,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       <View className="bg-gray-100 rounded-3xl flex-row items-center px-4 py-3">
         <Ionicons name="search" size={20} color="#6B7280" />
         <TextInput
+          ref={inputRef}
           className="flex-1 ml-3 text-gray-900 font-outfit-regular text-base"
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
@@ -161,26 +162,34 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <ActivityIndicator size="small" color="#3B82F6" />
         )}
         {value.length > 0 && !isLoadingSuggestions && (
-          <>
-            {onSearch && (
-              <TouchableOpacity
-                onPress={onSearch}
-                activeOpacity={0.7}
-                className="mr-2"
-              >
-                <Ionicons name="search" size={20} color="#3B82F6" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={() => {
-                onChangeText("");
-                setShowDropdown(false);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close-circle" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity
+            onPress={() => {
+              onChangeText("");
+              setShowDropdown(false);
+            }}
+            activeOpacity={0.7}
+            className="mr-2"
+          >
+            <Ionicons name="close-circle" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+        {onSearch && !isLoadingSuggestions && (
+          <TouchableOpacity
+            className="bg-blue-200 rounded-full p-2"
+            onPress={() => {
+              if (value.trim().length > 0) {
+                onSearch();
+              }
+            }}
+            activeOpacity={value.trim().length > 0 ? 0.7 : 1}
+            disabled={value.trim().length === 0}
+          >
+            <Ionicons
+              name="search"
+              size={20}
+              color={value.trim().length > 0 ? "#3B82F6" : "#9CA3AF"}
+            />
+          </TouchableOpacity>
         )}
       </View>
 

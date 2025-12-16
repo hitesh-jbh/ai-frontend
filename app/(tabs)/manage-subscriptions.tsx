@@ -296,6 +296,11 @@ export default function ManageSubscriptions() {
     mutationFn: () => subscription.createFreeSubscription(),
     onSuccess: () => {
       showSuccessToast("Success", "Free subscription activated successfully!");
+      // Invalidate all subscription status queries to ensure all components update
+      queryClient.invalidateQueries({
+        queryKey: ["subscriptionStatus"],
+      });
+      // Also specifically invalidate the user-specific query
       queryClient.invalidateQueries({
         queryKey: ["subscriptionStatus", user?.id],
       });
@@ -332,6 +337,11 @@ export default function ManageSubscriptions() {
         "Success",
         "Payment successful! Subscription activated."
       );
+      // Invalidate all subscription status queries to ensure all components update
+      queryClient.invalidateQueries({
+        queryKey: ["subscriptionStatus"],
+      });
+      // Also specifically invalidate the user-specific query
       queryClient.invalidateQueries({
         queryKey: ["subscriptionStatus", user?.id],
       });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,18 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Platform,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "@react-navigation/native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SearchBar } from "../../components/ui/SearchBar";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useSubscriptionStore } from "../../store/subscription-store";
+import { useAuthStore } from "../../store/auth-store";
+import { useSearchPreferencesStore } from "../../store/search-preferences-store";
 import { SearchResult } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -25,21 +26,36 @@ import {
   showErrorToast,
   showSuccessToast,
 } from "../../utils/toast";
+import { SearchLayerBottomSheet } from "../../components/search/SearchLayerBottomSheet";
 
 export default function Search() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [searchQuery, setSearchQuery] = useState(params.query || "");
   const [debouncedQuery, setDebouncedQuery] = useState(params.query || "");
+  const [searchTrigger, setSearchTrigger] = useState<string | null>(
+    params.query || null
+  ); // Track when to trigger search
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
+  const searchInputRef = useRef<TextInput>(null);
   const { search, subscription } = useServices();
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
+  const { user } = useAuthStore();
+  const { preferredLayer, initialize: initializePreferences } =
+    useSearchPreferencesStore();
+
+  // Initialize preferences on mount
+  useEffect(() => {
+    initializePreferences();
+  }, [initializePreferences]);
 
   // Fetch subscription status on mount
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
-    queryKey: ["subscriptionStatus"],
+    queryKey: ["subscriptionStatus", user?.id],
     queryFn: () => subscription.getCurrentStatus(),
+    enabled: !!user?.id,
     staleTime: 30000, // Cache for 30 seconds
     retry: 1,
   });
@@ -101,7 +117,8 @@ export default function Search() {
       } else {
         message += `You've used all ${subscription.dailyTokensLimit.toLocaleString()} tokens for today.`;
       }
-      message += " Please upgrade your plan or wait for the limit to reset tomorrow.";
+      message +=
+        " Please upgrade your plan or wait for the limit to reset tomorrow.";
 
       showErrorToast("Daily Limit Reached", message);
       setTimeout(() => {
@@ -111,18 +128,37 @@ export default function Search() {
     }
   }, [currentStatus]);
 
+  // Auto-focus search input when user has subscription and can search
+  // This runs every time the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentStatus?.canSearch && searchInputRef.current) {
+        // Small delay to ensure the component is fully mounted
+        const timer = setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }, [currentStatus?.canSearch])
+  );
+
   // Update search query when params change - only once
   useEffect(() => {
     if (
       params.query !== undefined &&
       params.query.trim() !== searchQuery.trim()
     ) {
-      setSearchQuery(params.query.trim());
-      setDebouncedQuery(params.query.trim());
+      const trimmedQuery = params.query.trim();
+      setSearchQuery(trimmedQuery);
+      setDebouncedQuery(trimmedQuery);
+      // Auto-trigger search if query comes from params
+      if (trimmedQuery.length > 0) {
+        setSearchTrigger(trimmedQuery);
+      }
     }
-  }, [params.query]); // Only depend on params.query, not searchQuery to avoid loops
+  }, [params.query]);
 
-  // Debounce search query - 500ms delay
+  // Debounce search query for suggestions only - 500ms delay
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery.trim());
@@ -131,10 +167,21 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Use memoized active query to prevent unnecessary re-renders
-  const activeQuery = useMemo(() => {
-    return debouncedQuery.trim();
-  }, [debouncedQuery]);
+  // Handle search trigger
+  const handleSearch = () => {
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery.length > 0 && currentStatus?.hasSubscription) {
+      setSearchTrigger(trimmedQuery);
+    } else if (!currentStatus?.hasSubscription) {
+      showInfoToast(
+        "Subscription Required",
+        "You need an active subscription to search. Please choose a plan to continue."
+      );
+    }
+  };
+
+  // Use searchTrigger for actual search, debouncedQuery for suggestions
+  const activeQuery = searchTrigger || "";
 
   // Fetch search history
   const { data: searchHistory } = useQuery({
@@ -143,20 +190,21 @@ export default function Search() {
     staleTime: 60000, // Cache for 1 minute
   });
 
-  // Fetch search results - only trigger when activeQuery changes (after debounce)
+  // Fetch search results - only trigger when searchTrigger is set (manual search)
   const {
     data: searchResult,
     isLoading,
     error,
     refetch,
   } = useQuery<SearchResult>({
-    queryKey: ["search", activeQuery],
+    queryKey: ["search", activeQuery, preferredLayer],
     queryFn: async () => {
       if (!activeQuery) {
         throw new Error("Query is required");
       }
       return search.search({
         query: activeQuery,
+        preferredLayer: preferredLayer,
         limit: 20,
         offset: 0,
       });
@@ -170,10 +218,10 @@ export default function Search() {
   useEffect(() => {
     if (searchResult) {
       queryClient.invalidateQueries({
-        queryKey: ["subscriptionStatus"],
+        queryKey: ["subscriptionStatus", user?.id],
       });
     }
-  }, [searchResult, queryClient]);
+  }, [searchResult, queryClient, user?.id]);
 
   // Handle search errors
   useEffect(() => {
@@ -244,13 +292,13 @@ export default function Search() {
     const trimmed = suggestion.trim();
     if (trimmed) {
       setSearchQuery(trimmed);
-      // Debounce will handle the search automatically
+      // Don't auto-search, user needs to click search button
     }
   };
 
   const handleHistorySelect = (historyItem: { query: string }) => {
     setSearchQuery(historyItem.query);
-    // Debounce will handle the search automatically
+    // Don't auto-search, user needs to click search button
   };
 
   const getSourceBadgeColor = (source: string) => {
@@ -279,14 +327,25 @@ export default function Search() {
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader title="Search" showBackButton />
       <View className="px-6 pb-4 border-b border-gray-200">
-        <View className="mt-2">
+        <View className="flex-row items-center gap-3 mt-2">
+          <View className="flex-1">
           <SearchBar
+            inputRef={searchInputRef}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onSearch={handleSearch}
             onSuggestionSelect={handleSuggestionSelect}
             placeholder="Ask a question..."
             showSuggestions={true}
           />
+          </View>
+          <TouchableOpacity
+            onPress={() => setShowPreferences(true)}
+            className="bg-gray-100 rounded-full p-3"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="options-outline" size={24} color="#3B82F6" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -591,6 +650,12 @@ export default function Search() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Search Preferences Bottom Sheet */}
+      <SearchLayerBottomSheet
+        visible={showPreferences}
+        onClose={() => setShowPreferences(false)}
+      />
     </SafeAreaView>
   );
 }

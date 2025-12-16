@@ -12,6 +12,7 @@ export interface SearchFilters {
 export interface SearchRequest {
   query: string;
   filters?: SearchFilters;
+  preferredLayer?: "automatic" | "cache" | "competitive" | "community" | "paid_ai";
   limit?: number;
   offset?: number;
 }

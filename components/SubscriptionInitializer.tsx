@@ -37,7 +37,13 @@ export function SubscriptionInitializer() {
       // If authenticated but no status yet, clear to avoid stale data
       clearSubscription();
     }
-  }, [currentStatus, setSubscriptionStatus, isAuthenticated, user?.id, clearSubscription]);
+  }, [
+    currentStatus,
+    setSubscriptionStatus,
+    isAuthenticated,
+    user?.id,
+    clearSubscription,
+  ]);
 
-  return null; // This component doesn't render anything
+  return null;
 }

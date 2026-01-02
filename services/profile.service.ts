@@ -4,6 +4,7 @@ export interface UpdateProfileRequest {
   name?: string;
   bio?: string;
   profilePicture?: string;
+  upiId?: string;
 }
 
 export interface ApiResponse<T> {

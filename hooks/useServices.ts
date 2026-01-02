@@ -8,12 +8,14 @@ import { createResourceService } from "../services/resource.service";
 import { createProfileService } from "../services/profile.service";
 import { createRewardService } from "../services/reward.service";
 import { createSubscriptionService } from "../services/subscription.service";
+import { createCoinRedemptionService } from "../services/coin-redemption.service";
+import { createSearchAdRevenueService } from "../services/search-ad-revenue.service";
 
 export const useServices = () => {
   const axiosInstance = useAxiosPrivate();
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const services = {
       search: createSearchService(axiosInstance),
       leaderboard: createLeaderboardService(axiosInstance),
       analytics: createAnalyticsService(axiosInstance),
@@ -22,7 +24,9 @@ export const useServices = () => {
       profile: createProfileService(axiosInstance),
       reward: createRewardService(axiosInstance),
       subscription: createSubscriptionService(axiosInstance),
-    }),
-    [axiosInstance]
-  );
+      coinRedemption: createCoinRedemptionService(axiosInstance),
+      searchAdRevenue: createSearchAdRevenueService(axiosInstance),
+    };
+    return services;
+  }, [axiosInstance]);
 };

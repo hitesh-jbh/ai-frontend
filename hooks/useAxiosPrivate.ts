@@ -7,9 +7,7 @@ import { authService } from "../services/auth.service";
 import { toast } from "./use-toast";
 
 const useAxiosPrivate = () => {
-  const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
-  const resetUser = useAuthStore((state) => state.resetUser);
   const client = useQueryClient();
 
   useEffect(() => {
@@ -31,6 +29,7 @@ const useAxiosPrivate = () => {
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
+        console.log("🚀 ~ useAxiosPrivate ~ originalRequest:", originalRequest)
 
         // Only handle 401 errors and avoid infinite retry loops
         if (error.response?.status === 401 && !originalRequest._retry) {

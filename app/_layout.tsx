@@ -10,7 +10,8 @@ import { AuthInitializer } from "../components/AuthInitializer";
 import { SubscriptionInitializer } from "../components/SubscriptionInitializer";
 import ToastManager from "toastify-react-native";
 import { toastConfig } from "@/utils/toast";
-import { NavigationContainer } from "@react-navigation/native";
+// import { NavigationContainer } from "@react-navigation/native";
+// import { adMobAdManager } from "../lib/admob-ad-manager";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -22,6 +23,13 @@ export default function RootLayout() {
     "Outfit-Bold": require("../assets/fonts/outfit/Outfit-Bold.ttf"),
     "Outfit-ExtraBold": require("../assets/fonts/outfit/Outfit-ExtraBold.ttf"),
   });
+
+  // Initialize AdMob when app starts
+  // useEffect(() => {
+  //   adMobAdManager.initialize().catch((error) => {
+  //     console.error("[AdMob] Failed to initialize:", error);
+  //   });
+  // }, []);
 
   useEffect(() => {
     if (fontError) throw fontError;
@@ -37,7 +45,7 @@ export default function RootLayout() {
             edges={["bottom", "left", "right"]}
           >
             <ToastManager config={toastConfig} />
-            <StatusBar style="dark" backgroundColor="transparent" translucent />
+            <StatusBar style="dark" backgroundColor="transparent" />
             <AuthInitializer />
             <SubscriptionInitializer />
             <Stack screenOptions={{ headerShown: false }} />

@@ -12,6 +12,7 @@ interface User {
   createdAt: string;
   bio?: string;
   profilePicture?: string;
+  upiId?: string;
   accessToken?: string;
   refreshToken?: string;
 }

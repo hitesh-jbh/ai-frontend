@@ -23,6 +23,7 @@ export interface User {
   role: string;
   points: number;
   createdAt: string;
+  upiId?: string;
 }
 
 export interface AuthResponse {
@@ -151,11 +152,11 @@ export const authService = {
   },
 
   async getProfile(): Promise<
-    User & { bio?: string; profilePicture?: string }
+    User & { bio?: string; profilePicture?: string; upiId?: string }
   > {
     const accessToken = await SecureStore.getItemAsync("accessToken");
     const response = await axiosInstance.get<
-      ApiResponse<User & { bio?: string; profilePicture?: string }>
+      ApiResponse<User & { bio?: string; profilePicture?: string; upiId?: string }>
     >("/auth/profile", {
       headers: {
         Authorization: `Bearer ${accessToken}`,

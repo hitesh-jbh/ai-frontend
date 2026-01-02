@@ -17,6 +17,7 @@ import { showErrorToast, showSuccessToast } from "@/utils/toast";
 const editProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(255),
   bio: z.union([z.string().max(500), z.literal("")]).optional(),
+  upiId: z.union([z.string().max(255), z.literal("")]).optional(),
 });
 
 type EditProfileForm = z.infer<typeof editProfileSchema>;
@@ -48,6 +49,7 @@ export default function EditProfile() {
     defaultValues: {
       name: displayUser?.name || "",
       bio: displayUser?.bio || "",
+      upiId: (displayUser as any)?.upiId || "",
     },
   });
 
@@ -64,6 +66,7 @@ export default function EditProfile() {
         reset({
           name: profileData.name || "",
           bio: profileData.bio || "",
+          upiId: (profileData as any)?.upiId || "",
         });
         setProfileImageUri(profileData.profilePicture);
         if (user) {
@@ -77,6 +80,7 @@ export default function EditProfile() {
     profileData?.bio,
     profileData?.profilePicture,
     profileData?.name,
+    (profileData as any)?.upiId,
   ]);
 
   const updateProfileMutation = useMutation({
@@ -103,6 +107,7 @@ export default function EditProfile() {
         name: string;
         bio?: string;
         profilePicture?: string;
+        upiId?: string;
       } = {
         name: data.name,
       };
@@ -111,6 +116,12 @@ export default function EditProfile() {
       if (data.bio !== undefined) {
         const trimmedBio = data.bio.trim();
         updateData.bio = trimmedBio === "" ? "" : trimmedBio;
+      }
+
+      // Include UPI ID - can be empty string to clear it
+      if (data.upiId !== undefined) {
+        const trimmedUpiId = data.upiId.trim();
+        updateData.upiId = trimmedUpiId === "" ? "" : trimmedUpiId;
       }
 
       // Only include profilePicture if it's a valid URL (not a local file path)
@@ -187,7 +198,7 @@ export default function EditProfile() {
           </View>
 
           {/* Bio Field */}
-          <View className="mb-6">
+          <View className="mb-4">
             <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
               Bio
             </Text>
@@ -215,6 +226,27 @@ export default function EditProfile() {
                 {errors.bio.message}
               </Text>
             )}
+          </View>
+
+          {/* UPI ID Field */}
+          <View className="mb-6">
+            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
+              UPI ID
+            </Text>
+            <ControlledInput
+              control={control}
+              name="upiId"
+              label=""
+              placeholder="yourname@upi"
+            />
+            {errors.upiId && (
+              <Text className="text-red-500 text-xs font-outfit-regular mt-1">
+                {errors.upiId.message}
+              </Text>
+            )}
+            <Text className="text-gray-500 text-xs font-outfit-regular mt-1">
+              Required for coin redemption. Format: yourname@upi
+            </Text>
           </View>
 
           {/* Action Buttons */}

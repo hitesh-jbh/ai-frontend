@@ -28,6 +28,12 @@ import {
 } from "../../utils/toast";
 import { SearchLayerBottomSheet } from "../../components/search/SearchLayerBottomSheet";
 
+interface PendingAdTracking {
+  query: string;
+  adType: "rewarded" | "interstitial";
+  revenue: number;
+}
+
 export default function Search() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [searchQuery, setSearchQuery] = useState(params.query || "");
@@ -38,8 +44,11 @@ export default function Search() {
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
+  const [isShowingAd, setIsShowingAd] = useState(false);
+  const [pendingAdTracking, setPendingAdTracking] =
+    useState<PendingAdTracking | null>(null);
   const searchInputRef = useRef<TextInput>(null);
-  const { search, subscription } = useServices();
+  const { search, subscription, searchAdRevenue } = useServices();
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
@@ -167,16 +176,57 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Handle search trigger
-  const handleSearch = () => {
+  // Handle search trigger - show ad first, then search
+  const handleSearch = async () => {
     const trimmedQuery = searchQuery.trim();
-    if (trimmedQuery.length > 0 && currentStatus?.hasSubscription) {
-      setSearchTrigger(trimmedQuery);
-    } else if (!currentStatus?.hasSubscription) {
+    if (trimmedQuery.length === 0) {
+      return;
+    }
+
+    if (!currentStatus?.hasSubscription) {
       showInfoToast(
         "Subscription Required",
         "You need an active subscription to search. Please choose a plan to continue."
       );
+      return;
+    }
+
+    // Determine ad type based on subscription plan
+    const isPaidUser = currentStatus.subscription?.plan !== "free";
+    const adType: "rewarded" | "interstitial" = isPaidUser
+      ? "rewarded"
+      : "interstitial";
+
+    // Show ad before performing search
+    setIsShowingAd(true);
+    try {
+      // Lazy load ad manager to avoid crashes on app startup
+      const { adMobAdManager } = await import("../../lib/admob-ad-manager");
+      const adResult = isPaidUser
+        ? await adMobAdManager.showRewardedAd()
+        : await adMobAdManager.showInterstitialAd();
+
+      setIsShowingAd(false);
+
+      if (adResult.success && adResult.revenue) {
+        // Store ad tracking info to track after search completes
+        setPendingAdTracking({
+          query: trimmedQuery,
+          adType,
+          revenue: adResult.revenue,
+        });
+
+        // Trigger search after ad completes
+        setSearchTrigger(trimmedQuery);
+      } else {
+        // Ad failed or was dismissed - still proceed with search but don't track revenue
+        setSearchTrigger(trimmedQuery);
+      }
+    } catch (error) {
+      console.error("Error showing ad:", error);
+      setIsShowingAd(false);
+      // Still proceed with search even if ad fails
+      setSearchTrigger(trimmedQuery);
     }
   };
 
@@ -222,6 +272,28 @@ export default function Search() {
       });
     }
   }, [searchResult, queryClient, user?.id]);
+
+  // Track ad revenue after search completes
+  useEffect(() => {
+    if (searchResult && pendingAdTracking) {
+      // Track ad revenue with search result metadata
+      searchAdRevenue
+        .trackAdRevenue({
+          query: pendingAdTracking.query,
+          searchResultSource: searchResult.source,
+          answerId: searchResult.answerId, // Only present for community answers
+          adType: pendingAdTracking.adType,
+          revenue: pendingAdTracking.revenue,
+        })
+        .catch((error) => {
+          console.error("Error tracking ad revenue:", error);
+          // Don't show error to user - tracking failure shouldn't block search
+        });
+
+      // Clear pending tracking
+      setPendingAdTracking(null);
+    }
+  }, [searchResult, pendingAdTracking, searchAdRevenue]);
 
   // Handle search errors
   useEffect(() => {
@@ -329,15 +401,15 @@ export default function Search() {
       <View className="px-6 pb-4 border-b border-gray-200">
         <View className="flex-row items-center gap-3 mt-2">
           <View className="flex-1">
-          <SearchBar
-            inputRef={searchInputRef}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSearch={handleSearch}
-            onSuggestionSelect={handleSuggestionSelect}
-            placeholder="Ask a question..."
-            showSuggestions={true}
-          />
+            <SearchBar
+              inputRef={searchInputRef}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSearch={handleSearch}
+              onSuggestionSelect={handleSuggestionSelect}
+              placeholder="Ask a question..."
+              showSuggestions={true}
+            />
           </View>
           <TouchableOpacity
             onPress={() => setShowPreferences(true)}
@@ -350,11 +422,11 @@ export default function Search() {
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-        {isLoading && (
+        {(isLoading || isShowingAd) && (
           <View className="items-center justify-center py-20">
             <ActivityIndicator size="large" color="#3B82F6" />
             <Text className="text-gray-600 text-sm font-outfit-regular mt-4">
-              Searching...
+              {isShowingAd ? "Loading ad..." : "Searching..."}
             </Text>
           </View>
         )}
@@ -371,7 +443,7 @@ export default function Search() {
           </View>
         )}
 
-        {searchResult && !isLoading && (
+        {searchResult && !isLoading && !isShowingAd && (
           <View className="mt-4">
             {/* Source Badge */}
             <View className="flex-row items-center justify-between mb-3">
@@ -498,65 +570,68 @@ export default function Search() {
         )}
 
         {/* Show search history when no query or when typing */}
-        {!activeQuery && !isLoading && currentStatus?.hasSubscription && (
-          <View>
-            {searchHistory && searchHistory.length > 0 && (
-              <View className="mb-6">
-                <View className="flex-row items-center justify-between mb-4">
-                  <Text className="text-gray-900 text-lg font-outfit-semi-bold">
-                    Recent Searches
-                  </Text>
-                  <Ionicons name="time-outline" size={20} color="#6B7280" />
-                </View>
-                <View>
-                  {searchHistory.map((item, index) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      className={`bg-gray-50 rounded-xl p-4 flex-row items-center justify-between ${
-                        index > 0 ? "mt-2" : ""
-                      }`}
-                      onPress={() => handleHistorySelect(item)}
-                      activeOpacity={0.7}
-                    >
-                      <View className="flex-1">
-                        <Text className="text-gray-900 text-base font-outfit-regular">
-                          {item.query}
-                        </Text>
-                        <View className="flex-row items-center mt-1">
-                          {item.resultCount > 0 && (
-                            <Text className="text-gray-500 text-xs font-outfit-regular mr-3">
-                              {item.resultCount} results
-                            </Text>
-                          )}
-                          <Text className="text-gray-400 text-xs font-outfit-regular">
-                            {new Date(item.createdAt).toLocaleDateString()}
+        {!activeQuery &&
+          !isLoading &&
+          !isShowingAd &&
+          currentStatus?.hasSubscription && (
+            <View>
+              {searchHistory && searchHistory.length > 0 && (
+                <View className="mb-6">
+                  <View className="flex-row items-center justify-between mb-4">
+                    <Text className="text-gray-900 text-lg font-outfit-semi-bold">
+                      Recent Searches
+                    </Text>
+                    <Ionicons name="time-outline" size={20} color="#6B7280" />
+                  </View>
+                  <View>
+                    {searchHistory.map((item, index) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        className={`bg-gray-50 rounded-xl p-4 flex-row items-center justify-between ${
+                          index > 0 ? "mt-2" : ""
+                        }`}
+                        onPress={() => handleHistorySelect(item)}
+                        activeOpacity={0.7}
+                      >
+                        <View className="flex-1">
+                          <Text className="text-gray-900 text-base font-outfit-regular">
+                            {item.query}
                           </Text>
+                          <View className="flex-row items-center mt-1">
+                            {item.resultCount > 0 && (
+                              <Text className="text-gray-500 text-xs font-outfit-regular mr-3">
+                                {item.resultCount} results
+                              </Text>
+                            )}
+                            <Text className="text-gray-400 text-xs font-outfit-regular">
+                              {new Date(item.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={20}
-                        color="#9CA3AF"
-                      />
-                    </TouchableOpacity>
-                  ))}
+                        <Ionicons
+                          name="chevron-forward"
+                          size={20}
+                          color="#9CA3AF"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
-            {(!searchHistory || searchHistory.length === 0) && (
-              <View className="items-center justify-center py-20">
-                <Ionicons name="search" size={48} color="#9CA3AF" />
-                <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
-                  Start searching
-                </Text>
-                <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-                  Enter a question to get an AI-powered answer
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
+              {(!searchHistory || searchHistory.length === 0) && (
+                <View className="items-center justify-center py-20">
+                  <Ionicons name="search" size={48} color="#9CA3AF" />
+                  <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
+                    Start searching
+                  </Text>
+                  <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+                    Enter a question to get an AI-powered answer
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
       </ScrollView>
 
       {/* Submit Answer Modal */}

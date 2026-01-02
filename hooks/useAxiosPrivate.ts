@@ -29,7 +29,6 @@ const useAxiosPrivate = () => {
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
-        console.log("🚀 ~ useAxiosPrivate ~ originalRequest:", originalRequest)
 
         // Only handle 401 errors and avoid infinite retry loops
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -60,10 +59,17 @@ const useAxiosPrivate = () => {
                 accessToken: data.accessToken,
                 refreshToken: data.refreshToken,
               };
-              setUser(updatedUser);
+              // setUser will persist tokens to SecureStore
+              await setUser(updatedUser);
               console.log("User tokens updated successfully");
             } else {
               console.warn("No user in store when refreshing token");
+              // Still save tokens to SecureStore even if no user in store
+              const { default: SecureStore } = await import(
+                "expo-secure-store"
+              );
+              await SecureStore.setItemAsync("accessToken", data.accessToken);
+              await SecureStore.setItemAsync("refreshToken", data.refreshToken);
             }
 
             // Update the original request with new token

@@ -1,6 +1,9 @@
 import { axiosInstance, axiosRefreshInstance } from "../lib/axios";
 import * as SecureStore from "expo-secure-store";
 
+// Lock to prevent multiple simultaneous refresh attempts
+let refreshPromise: Promise<{ data: { accessToken: string; refreshToken: string }; status: number }> | null = null;
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -102,53 +105,83 @@ export const authService = {
     data: { accessToken: string; refreshToken: string };
     status: number;
   }> {
-    const refreshToken = await SecureStore.getItemAsync("refreshToken");
-    if (!refreshToken) {
-      console.error("No refresh token available in SecureStore");
-      throw new Error("No refresh token available");
+    // If a refresh is already in progress, wait for it instead of starting a new one
+    if (refreshPromise) {
+      return refreshPromise;
     }
 
-    console.log("Refreshing JWT Token");
+    // Create the refresh promise
+    refreshPromise = (async () => {
+      try {
+        // Try to get refresh token from user store first (more reliable)
+        // Fallback to SecureStore if not in store
+        let refreshToken: string | null = null;
+        
+        try {
+          // Try to get from store first (if available)
+          const { useAuthStore } = await import("../store/auth-store.js");
+          const user = useAuthStore.getState().user;
+          refreshToken = user?.refreshToken || null;
+        } catch (error) {
+          // Store not available, continue to SecureStore
+        }
+        
+        // Fallback to SecureStore if not in user store
+        if (!refreshToken) {
+          refreshToken = await SecureStore.getItemAsync("refreshToken");
+        }
+        
+        if (!refreshToken) {
+          console.error("No refresh token available in SecureStore or user store");
+          throw new Error("No refresh token available");
+        }
 
-    try {
-      // Use axiosRefreshInstance which doesn't have interceptors
-      // This avoids circular dependency when refreshing tokens
-      const response = await axiosRefreshInstance.post<
-        ApiResponse<{ accessToken: string; refreshToken: string }>
-      >("/auth/refresh", { refreshToken });
+        console.log("Refreshing JWT Token");
 
-      const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        // Use axiosRefreshInstance which doesn't have interceptors
+        // This avoids circular dependency when refreshing tokens
+        const response = await axiosRefreshInstance.post<
+          ApiResponse<{ accessToken: string; refreshToken: string }>
+        >("/auth/refresh", { refreshToken });
 
-      if (!accessToken) {
-        console.error("No access token in refresh response");
-        throw new Error("Invalid refresh response - no access token");
+        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+
+        if (!accessToken) {
+          console.error("No access token in refresh response");
+          throw new Error("Invalid refresh response - no access token");
+        }
+
+        // Store new tokens in SecureStore
+        await SecureStore.setItemAsync("accessToken", accessToken);
+        if (newRefreshToken) {
+          await SecureStore.setItemAsync("refreshToken", newRefreshToken);
+        } else {
+          // If no new refresh token, keep the old one
+          console.warn("No new refresh token provided, keeping existing one");
+        }
+
+        console.log("JWT Token refreshed");
+
+        return {
+          data: {
+            accessToken,
+            refreshToken: newRefreshToken || refreshToken, // Fallback to old token if new one not provided
+          },
+          status: response.status,
+        };
+      } catch (error: any) {
+        console.error(
+          "Token refresh error:",
+          error?.response?.data || error?.message
+        );
+        throw error;
+      } finally {
+        // Clear the promise so a new refresh can be attempted if needed
+        refreshPromise = null;
       }
+    })();
 
-      // Store new tokens in SecureStore
-      await SecureStore.setItemAsync("accessToken", accessToken);
-      if (newRefreshToken) {
-        await SecureStore.setItemAsync("refreshToken", newRefreshToken);
-      } else {
-        // If no new refresh token, keep the old one
-        console.warn("No new refresh token provided, keeping existing one");
-      }
-
-      console.log("JWT Token refreshed");
-
-      return {
-        data: {
-          accessToken,
-          refreshToken: newRefreshToken || refreshToken, // Fallback to old token if new one not provided
-        },
-        status: response.status,
-      };
-    } catch (error: any) {
-      console.error(
-        "Token refresh error:",
-        error?.response?.data || error?.message
-      );
-      throw error;
-    }
+    return refreshPromise;
   },
 
   async getProfile(): Promise<

@@ -28,11 +28,11 @@ interface AuthState {
   ) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
-  setUser: (user: User | null) => void;
+  setUser: (user: User | null) => Promise<void>;
   resetUser: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   user: null,
   isLoading: true,
@@ -71,11 +71,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         // Fetch user profile to get latest data including bio and profilePicture
         try {
           const profile = await authService.getProfile();
-          set({
-            isAuthenticated: true,
-            user: { ...profile, accessToken, refreshToken },
-            isLoading: false,
-          });
+          // Use setUser to persist tokens properly
+          const setUserFn = get().setUser;
+          await setUserFn({ ...profile, accessToken, refreshToken });
+          set({ isLoading: false });
 
           // Fetch subscription status after profile is loaded
           // This will be handled by components that use subscription store
@@ -86,15 +85,14 @@ export const useAuthStore = create<AuthState>((set) => ({
               const { data } = await authService.refreshToken();
               if (data?.accessToken) {
                 const profile = await authService.getProfile();
-                set({
-                  isAuthenticated: true,
-                  user: {
-                    ...profile,
-                    accessToken: data.accessToken,
-                    refreshToken: data.refreshToken,
-                  },
-                  isLoading: false,
+                // Use setUser to persist tokens properly
+                const setUserFn = get().setUser;
+                await setUserFn({
+                  ...profile,
+                  accessToken: data.accessToken,
+                  refreshToken: data.refreshToken,
                 });
+                set({ isLoading: false });
 
                 // Fetch subscription status after profile is loaded
               } else {
@@ -111,7 +109,13 @@ export const useAuthStore = create<AuthState>((set) => ({
             }
           } else {
             // Other error, still set as authenticated with token
-            set({ isAuthenticated: true, isLoading: false });
+            // Use setUser to ensure tokens are persisted
+            const setUserFn = get().setUser;
+            const currentUser = get().user;
+            if (currentUser) {
+              await setUserFn({ ...currentUser, accessToken, refreshToken });
+            }
+            set({ isLoading: false });
           }
         }
       } else {
@@ -123,7 +127,51 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  setUser: (user) => {
+  setUser: async (user) => {
+    // Always preserve existing tokens if new user object doesn't have them
+    // This is important when updating user profile data (which may not include tokens)
+    let tokensToStore = { accessToken: user?.accessToken, refreshToken: user?.refreshToken };
+    
+    // If tokens are missing from user object, try to get them from SecureStore
+    if (!tokensToStore.accessToken || !tokensToStore.refreshToken) {
+      try {
+        const existingAccessToken = tokensToStore.accessToken || await SecureStore.getItemAsync("accessToken");
+        const existingRefreshToken = tokensToStore.refreshToken || await SecureStore.getItemAsync("refreshToken");
+        tokensToStore = {
+          accessToken: existingAccessToken || tokensToStore.accessToken,
+          refreshToken: existingRefreshToken || tokensToStore.refreshToken,
+        };
+        // Update user object with preserved tokens
+        if (user && (existingAccessToken || existingRefreshToken)) {
+          user = {
+            ...user,
+            accessToken: existingAccessToken || user.accessToken,
+            refreshToken: existingRefreshToken || user.refreshToken,
+          };
+        }
+      } catch (error) {
+        console.error("Error reading tokens from SecureStore in setUser:", error);
+      }
+    }
+    
+    // Persist tokens to SecureStore if we have them
+    if (tokensToStore.accessToken) {
+      await SecureStore.setItemAsync("accessToken", tokensToStore.accessToken);
+    }
+    if (tokensToStore.refreshToken) {
+      await SecureStore.setItemAsync("refreshToken", tokensToStore.refreshToken);
+    }
+    
+    // If user is null, clear SecureStore tokens
+    if (!user) {
+      try {
+        await SecureStore.deleteItemAsync("accessToken");
+        await SecureStore.deleteItemAsync("refreshToken");
+      } catch (error) {
+        console.error("Error clearing tokens in setUser:", error);
+      }
+    }
+    
     set({ user, isAuthenticated: !!user });
   },
 

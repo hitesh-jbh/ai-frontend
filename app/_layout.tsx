@@ -11,7 +11,7 @@ import { SubscriptionInitializer } from "../components/SubscriptionInitializer";
 import ToastManager from "toastify-react-native";
 import { toastConfig } from "@/utils/toast";
 // import { NavigationContainer } from "@react-navigation/native";
-// import { adMobAdManager } from "../lib/admob-ad-manager";
+import { adMobAdManager } from "../lib/admob-ad-manager";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -25,11 +25,12 @@ export default function RootLayout() {
   });
 
   // Initialize AdMob when app starts
-  // useEffect(() => {
-  //   adMobAdManager.initialize().catch((error) => {
-  //     console.error("[AdMob] Failed to initialize:", error);
-  //   });
-  // }, []);
+  useEffect(() => {
+    adMobAdManager.initialize().catch((error) => {
+      console.error("[AdMob] Failed to initialize:", error);
+      // Don't show error to user - mock mode will be used as fallback
+    });
+  }, []);
 
   useEffect(() => {
     if (fontError) throw fontError;

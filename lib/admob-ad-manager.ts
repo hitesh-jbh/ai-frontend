@@ -1,8 +1,8 @@
 /**
  * AdMob Ad Manager
- * 
+ *
  * This module provides an abstraction layer for AdMob ads.
- * 
+ *
  * NOTE: Make sure to:
  * 1. Replace placeholder App IDs in app.json with your actual AdMob App IDs
  * 2. Create a development build: npx expo prebuild && npx expo run:android (or run:ios)
@@ -45,7 +45,7 @@ class AdMobAdManager {
     try {
       // Try to dynamically import - wrap in try-catch to prevent crashes
       try {
-        const mobileAdsModule = await import('react-native-google-mobile-ads');
+        const mobileAdsModule = await import("react-native-google-mobile-ads");
         const mobileAds = mobileAdsModule.default;
         if (mobileAds) {
           await mobileAds().initialize();
@@ -55,11 +55,14 @@ class AdMobAdManager {
         // Package not available or initialization failed - use mock mode
         console.warn("[AdMob] SDK not available, using mock mode");
       }
-      
+
       this.isInitialized = true;
     } catch (error: any) {
       // If package is not installed or initialization fails, fall back to mock mode
-      console.warn("[AdMob] Initialization failed, using mock mode:", error?.message);
+      console.warn(
+        "[AdMob] Initialization failed, using mock mode:",
+        error?.message
+      );
       this.isInitialized = true; // Still mark as initialized to allow mock mode
     }
   }
@@ -76,42 +79,82 @@ class AdMobAdManager {
     try {
       // Try to use real AdMob SDK
       try {
-        const { RewardedAd, RewardedAdEventType, TestIds } = await import('react-native-google-mobile-ads');
-        const Platform = await import('react-native').then(m => m.Platform);
-        
-        const adUnitId = config?.adUnitId || 
-          (Platform.OS === 'ios' ? this.testAdUnitIds.rewarded.ios : this.testAdUnitIds.rewarded.android);
-        
+        const mobileAdsModule = await import("react-native-google-mobile-ads");
+        const RewardedAd = mobileAdsModule.RewardedAd;
+        const RewardedAdEventType = mobileAdsModule.RewardedAdEventType;
+
+        if (!RewardedAd || !RewardedAdEventType) {
+          throw new Error(
+            "RewardedAd or RewardedAdEventType not exported from react-native-google-mobile-ads"
+          );
+        }
+
+        const Platform = await import("react-native").then((m) => m.Platform);
+
+        const adUnitId =
+          config?.adUnitId ||
+          (Platform.OS === "ios"
+            ? this.testAdUnitIds.rewarded.ios
+            : this.testAdUnitIds.rewarded.android);
+
         const rewarded = RewardedAd.createForAdRequest(adUnitId, {
           requestNonPersonalizedAdsOnly: true,
         });
 
         return new Promise((resolve) => {
-          const loadedListener = rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
-            rewarded.show();
+          let isResolved = false;
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+          const resolveOnce = (result: AdResult) => {
+            if (!isResolved) {
+              isResolved = true;
+              if (timeoutId) clearTimeout(timeoutId);
+              resolve(result);
+            }
+          };
+
+          // Set timeout to detect if ad fails to load (30 seconds)
+          timeoutId = setTimeout(() => {
+            resolveOnce({ success: false, error: "Ad loading timeout" });
+          }, 30000);
+
+          rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            try {
+              rewarded.show();
+            } catch (showError: any) {
+              resolveOnce({
+                success: false,
+                error: showError?.message || "Failed to show ad",
+              });
+            }
           });
 
-          const earnedListener = rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
-            // Estimate revenue (adjust based on your actual ad performance)
-            const estimatedRevenue = 0.01 + Math.random() * 0.04; // ₹0.01 - ₹0.05
-            loadedListener.remove();
-            earnedListener.remove();
-            errorListener.remove();
-            resolve({ success: true, revenue: estimatedRevenue });
-          });
+          rewarded.addAdEventListener(
+            RewardedAdEventType.EARNED_REWARD,
+            (reward) => {
+              // Estimate revenue (adjust based on your actual ad performance)
+              const estimatedRevenue = 0.01 + Math.random() * 0.04; // ₹0.01 - ₹0.05
+              resolveOnce({ success: true, revenue: estimatedRevenue });
+            }
+          );
 
-          const errorListener = rewarded.addAdEventListener(RewardedAdEventType.ERROR, (error) => {
-            loadedListener.remove();
-            earnedListener.remove();
-            errorListener.remove();
-            resolve({ success: false, error: error.message });
-          });
-
-          rewarded.load();
+          // Load the ad (load() doesn't return a promise, it's fire-and-forget)
+          try {
+            rewarded.load();
+          } catch (loadError: any) {
+            resolveOnce({
+              success: false,
+              error: loadError?.message || "Failed to load ad",
+            });
+          }
         });
-      } catch (sdkError) {
+      } catch (sdkError: any) {
         // Fall back to mock if SDK is not available
-        console.warn("[AdMob] SDK not available, using mock:", sdkError);
+        console.warn(
+          "[AdMob] SDK not available, using mock:",
+          sdkError?.message
+        );
         const mockRevenue = 0.01 + Math.random() * 0.04; // ₹0.01 - ₹0.05
         console.log("[AdMob] Rewarded ad shown (mock), revenue:", mockRevenue);
         return { success: true, revenue: mockRevenue };
@@ -137,44 +180,84 @@ class AdMobAdManager {
     try {
       // Try to use real AdMob SDK
       try {
-        const { InterstitialAd, AdEventType, TestIds } = await import('react-native-google-mobile-ads');
-        const Platform = await import('react-native').then(m => m.Platform);
-        
-        const adUnitId = config?.adUnitId || 
-          (Platform.OS === 'ios' ? this.testAdUnitIds.interstitial.ios : this.testAdUnitIds.interstitial.android);
-        
+        const mobileAdsModule = await import("react-native-google-mobile-ads");
+        const InterstitialAd = mobileAdsModule.InterstitialAd;
+        const AdEventType = mobileAdsModule.AdEventType;
+
+        if (!InterstitialAd || !AdEventType) {
+          throw new Error(
+            "InterstitialAd or AdEventType not exported from react-native-google-mobile-ads"
+          );
+        }
+
+        const Platform = await import("react-native").then((m) => m.Platform);
+
+        const adUnitId =
+          config?.adUnitId ||
+          (Platform.OS === "ios"
+            ? this.testAdUnitIds.interstitial.ios
+            : this.testAdUnitIds.interstitial.android);
+
         const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
           requestNonPersonalizedAdsOnly: true,
         });
 
         return new Promise((resolve) => {
-          const loadedListener = interstitial.addAdEventListener(AdEventType.LOADED, () => {
-            interstitial.show();
+          let isResolved = false;
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+          const resolveOnce = (result: AdResult) => {
+            if (!isResolved) {
+              isResolved = true;
+              if (timeoutId) clearTimeout(timeoutId);
+              resolve(result);
+            }
+          };
+
+          // Set timeout to detect if ad fails to load (30 seconds)
+          timeoutId = setTimeout(() => {
+            resolveOnce({ success: false, error: "Ad loading timeout" });
+          }, 30000);
+
+          interstitial.addAdEventListener(AdEventType.LOADED, () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            try {
+              interstitial.show();
+            } catch (showError: any) {
+              resolveOnce({
+                success: false,
+                error: showError?.message || "Failed to show ad",
+              });
+            }
           });
 
-          const closedListener = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+          interstitial.addAdEventListener(AdEventType.CLOSED, () => {
             // Estimate revenue (adjust based on your actual ad performance)
             const estimatedRevenue = 0.02 + Math.random() * 0.08; // ₹0.02 - ₹0.10
-            loadedListener.remove();
-            closedListener.remove();
-            errorListener.remove();
-            resolve({ success: true, revenue: estimatedRevenue });
+            resolveOnce({ success: true, revenue: estimatedRevenue });
           });
 
-          const errorListener = interstitial.addAdEventListener(AdEventType.ERROR, (error) => {
-            loadedListener.remove();
-            closedListener.remove();
-            errorListener.remove();
-            resolve({ success: false, error: error.message });
-          });
-
-          interstitial.load();
+          // Load the ad (load() doesn't return a promise, it's fire-and-forget)
+          try {
+            interstitial.load();
+          } catch (loadError: any) {
+            resolveOnce({
+              success: false,
+              error: loadError?.message || "Failed to load ad",
+            });
+          }
         });
-      } catch (sdkError) {
+      } catch (sdkError: any) {
         // Fall back to mock if SDK is not available
-        console.warn("[AdMob] SDK not available, using mock:", sdkError);
+        console.warn(
+          "[AdMob] SDK not available, using mock:",
+          sdkError?.message
+        );
         const mockRevenue = 0.02 + Math.random() * 0.08; // ₹0.02 - ₹0.10
-        console.log("[AdMob] Interstitial ad shown (mock), revenue:", mockRevenue);
+        console.log(
+          "[AdMob] Interstitial ad shown (mock), revenue:",
+          mockRevenue
+        );
         return { success: true, revenue: mockRevenue };
       }
     } catch (error: any) {
@@ -188,4 +271,3 @@ class AdMobAdManager {
 }
 
 export const adMobAdManager = new AdMobAdManager();
-

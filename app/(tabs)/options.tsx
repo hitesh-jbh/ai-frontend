@@ -140,11 +140,11 @@ export default function Options() {
               label="Rewards"
               onPress={() => router.push("/(tabs)/rewards")}
             />
-            <MenuItem
+            {/* <MenuItem
               icon="people-outline"
               label="Community"
               onPress={() => router.push("/(tabs)/community")}
-            />
+            /> */}
             {/* <MenuItem
               icon="school-outline"
               label="Quizzes"

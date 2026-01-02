@@ -176,6 +176,13 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Clear search results when input is cleared
+  useEffect(() => {
+    if (searchQuery.trim().length === 0 && searchTrigger) {
+      setSearchTrigger(null);
+    }
+  }, [searchQuery, searchTrigger]);
+
   // Handle search trigger - show ad first, then search
   const handleSearch = async () => {
     const trimmedQuery = searchQuery.trim();
@@ -368,9 +375,60 @@ export default function Search() {
     }
   };
 
-  const handleHistorySelect = (historyItem: { query: string }) => {
-    setSearchQuery(historyItem.query);
-    // Don't auto-search, user needs to click search button
+  const handleHistorySelect = async (historyItem: { query: string }) => {
+    const trimmedQuery = historyItem.query.trim();
+    if (trimmedQuery.length === 0) {
+      return;
+    }
+
+    // Update the search query in the input
+    setSearchQuery(trimmedQuery);
+
+    if (!currentStatus?.hasSubscription) {
+      showInfoToast(
+        "Subscription Required",
+        "You need an active subscription to search. Please choose a plan to continue."
+      );
+      return;
+    }
+
+    // Determine ad type based on subscription plan
+    const isPaidUser = currentStatus.subscription?.plan !== "free";
+    const adType: "rewarded" | "interstitial" = isPaidUser
+      ? "rewarded"
+      : "interstitial";
+
+    // Show ad before performing search (same as handleSearch)
+    setIsShowingAd(true);
+    try {
+      // Lazy load ad manager to avoid crashes on app startup
+      const { adMobAdManager } = await import("../../lib/admob-ad-manager");
+      const adResult = isPaidUser
+        ? await adMobAdManager.showRewardedAd()
+        : await adMobAdManager.showInterstitialAd();
+
+      setIsShowingAd(false);
+
+      if (adResult.success && adResult.revenue) {
+        // Store ad tracking info to track after search completes
+        setPendingAdTracking({
+          query: trimmedQuery,
+          adType,
+          revenue: adResult.revenue,
+        });
+
+        // Trigger search after ad completes
+        setSearchTrigger(trimmedQuery);
+      } else {
+        // Ad failed or was dismissed - still proceed with search but don't track revenue
+        setSearchTrigger(trimmedQuery);
+      }
+    } catch (error) {
+      console.error("Error showing ad:", error);
+      setIsShowingAd(false);
+      // Still proceed with search even if ad fails
+      setSearchTrigger(trimmedQuery);
+    }
   };
 
   const getSourceBadgeColor = (source: string) => {
@@ -408,7 +466,7 @@ export default function Search() {
               onSearch={handleSearch}
               onSuggestionSelect={handleSuggestionSelect}
               placeholder="Ask a question..."
-              showSuggestions={true}
+              showSuggestions={false}
             />
           </View>
           <TouchableOpacity
@@ -426,7 +484,7 @@ export default function Search() {
           <View className="items-center justify-center py-20">
             <ActivityIndicator size="large" color="#3B82F6" />
             <Text className="text-gray-600 text-sm font-outfit-regular mt-4">
-              {isShowingAd ? "Loading ad..." : "Searching..."}
+              {isShowingAd ? "Loading..." : "Searching..."}
             </Text>
           </View>
         )}

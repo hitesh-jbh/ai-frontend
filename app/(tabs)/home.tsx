@@ -19,7 +19,6 @@ import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
 import { ResponsiveText } from "@/utils/responsive-text";
-import { showErrorToast, showInfoToast, showSuccessToast } from "@/utils/toast";
 
 export default function Home() {
   const [profileImageError, setProfileImageError] = useState(false);
@@ -147,7 +146,7 @@ export default function Home() {
         <TrendingBanner
           trendingText=""
           onCreateVault={() => router.push("/(tabs)/vaults")}
-          onStartEarning={() => {}}
+          onStartEarning={() => router.push("/(tabs)/vaults")}
           onTutorials={() => router.push("/(tabs)/search")}
         />
 

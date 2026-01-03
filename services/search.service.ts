@@ -27,6 +27,7 @@ export interface SearchResult {
   layer: string;
   query: string;
   answerId?: string; // For upvoting community answers
+  webResults?: Array<{ title: string; snippet: string; url: string }>; // For competitive layer: top 3 raw web results
 }
 
 export interface SearchSuggestion {

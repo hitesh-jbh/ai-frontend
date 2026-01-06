@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { showSuccessToast, showErrorToast, showInfoToast } from "../../utils/toast";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 
 const addResourceSchema = z
   .object({
@@ -95,16 +96,57 @@ export default function AddResource() {
         if (!result.canceled && result.assets[0]) {
           setFileUri(result.assets[0].uri);
         }
-      } else if (resourceType === "pdf" || resourceType === "note") {
-        // For now, we'll use image picker for PDFs too
-        // In production, use expo-document-picker
-        showInfoToast(
-          "Info",
-          "File picker will be implemented with expo-document-picker"
-        );
+      } else if (resourceType === "pdf") {
+        // Use document picker for PDFs
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "application/pdf",
+          copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled) {
+          // expo-document-picker returns result with assets array
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            if (asset.uri) {
+              setFileUri(asset.uri);
+              showSuccessToast("Success", `PDF selected: ${asset.name || "file"}`);
+            } else {
+              showErrorToast("Error", "File URI not found");
+            }
+          } else {
+            showErrorToast("Error", "No file selected");
+          }
+        }
+      } else if (resourceType === "note") {
+        // Use document picker for notes (allow various document types)
+        const result = await DocumentPicker.getDocumentAsync({
+          type: [
+            "application/pdf",
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+          copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled) {
+          // expo-document-picker returns result with assets array
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            if (asset.uri) {
+              setFileUri(asset.uri);
+              showSuccessToast("Success", `File selected: ${asset.name || "file"}`);
+            } else {
+              showErrorToast("Error", "File URI not found");
+            }
+          } else {
+            showErrorToast("Error", "No file selected");
+          }
+        }
       }
-    } catch (error) {
-      showErrorToast("Error", "Failed to pick file");
+    } catch (error: any) {
+      console.error("Error picking file:", error);
+      showErrorToast("Error", error?.message || "Failed to pick file");
     }
   };
 

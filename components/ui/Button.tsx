@@ -1,3 +1,4 @@
+import { getFontSizeAndLineHeight } from "@/utils/font-scale";
 import React from "react";
 import {
   TouchableOpacity,
@@ -46,7 +47,8 @@ export const Button: React.FC<ButtonProps> = ({
         />
       ) : (
         <Text
-          className={`font-outfit-semi-bold text-base ${textClasses[variant]}`}
+          style={getFontSizeAndLineHeight("base")}
+          className={`font-outfit-semi-bold ${textClasses[variant]}`}
           allowFontScaling
           adjustsFontSizeToFit
         >

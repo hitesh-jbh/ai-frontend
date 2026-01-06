@@ -2,6 +2,7 @@ import React from "react";
 import { TextInput, Text, View, TextInputProps } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Control, Controller, FieldPath, FieldValues } from "react-hook-form";
+import { getFontSizeAndLineHeight } from "@/utils/font-scale";
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -52,11 +53,14 @@ interface ControlledInputProps<T extends FieldValues>
   extends Omit<InputProps, "value" | "onChangeText" | "error"> {
   name: FieldPath<T>;
   control: Control<T>;
+  required?: boolean;
 }
 
 export function ControlledInput<T extends FieldValues>({
   name,
   control,
+  label,
+  required = false,
   ...props
 }: ControlledInputProps<T>) {
   return (
@@ -67,13 +71,29 @@ export function ControlledInput<T extends FieldValues>({
         field: { onChange, onBlur, value },
         fieldState: { error },
       }) => (
-        <Input
-          {...props}
-          value={value}
-          onChangeText={onChange}
-          onBlur={onBlur}
-          error={error?.message}
-        />
+        <>
+          <View className="mb-4 gap-2 flex-row">
+            {label && (
+              <>
+                <Text
+                  style={getFontSizeAndLineHeight("base")}
+                  className="text-gray-700 font-outfit-regular"
+                >
+                  {label}
+                </Text>
+                {required && <Text className="text-red-500">*</Text>}
+              </>
+            )}
+          </View>
+          <Input
+            {...props}
+            value={value}
+            onBlur={onBlur}
+            onChangeText={onChange}
+            error={error?.message}
+            style={getFontSizeAndLineHeight("base")}
+          />
+        </>
       )}
     />
   );

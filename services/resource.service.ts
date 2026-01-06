@@ -51,7 +51,21 @@ export const createResourceService = (axiosInstance: AxiosInstance) => ({
     resourceId: string
   ): Promise<string> {
     const formData = new FormData();
-    const filename = fileUri.split("/").pop() || "file";
+    // Extract filename from URI - handle both file:// and content:// URIs
+    let filename = "file";
+    if (fileUri.includes("/")) {
+      filename = fileUri.split("/").pop() || "file";
+      // Remove query parameters if any
+      filename = filename.split("?")[0];
+    }
+    // If no extension found, add one based on resource type
+    if (!filename.includes(".")) {
+      if (resourceType === "pdf") {
+        filename = `${filename}.pdf`;
+      } else if (resourceType === "video") {
+        filename = `${filename}.mp4`;
+      }
+    }
     const match = /\.(\w+)$/.exec(filename);
 
     // Determine correct MIME type based on file extension and resource type
@@ -60,6 +74,22 @@ export const createResourceService = (axiosInstance: AxiosInstance) => ({
       mimeType = "video/mp4";
     } else if (resourceType === "pdf") {
       mimeType = "application/pdf";
+    } else if (resourceType === "note") {
+      // For notes, try to detect MIME type from extension
+      if (match) {
+        const ext = match[1].toLowerCase();
+        if (ext === "pdf") {
+          mimeType = "application/pdf";
+        } else if (ext === "txt") {
+          mimeType = "text/plain";
+        } else if (ext === "doc") {
+          mimeType = "application/msword";
+        } else if (ext === "docx") {
+          mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        } else if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+          mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+        }
+      }
     } else if (match) {
       const ext = match[1].toLowerCase();
       if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {

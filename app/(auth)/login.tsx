@@ -9,7 +9,6 @@ import { useMutation } from "@tanstack/react-query";
 import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Checkbox } from "../../components/ui/Checkbox";
-import { Link } from "../../components/ui/Link";
 import { authService } from "../../services/auth.service";
 import { useAuthStore } from "../../store/auth-store";
 import {
@@ -18,6 +17,7 @@ import {
 } from "../../lib/validations/auth.schema";
 import { Ionicons } from "@expo/vector-icons";
 import { showErrorToast, showSuccessToast } from "../../utils/toast";
+import { getFontSizeAndLineHeight } from "@/utils/font-scale";
 
 const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
@@ -84,18 +84,25 @@ const Login = () => {
       >
         <View className="px-6 py-4">
           <View className="mb-8">
-            <Text className="text-gray-900 text-3xl font-outfit-bold mb-2">
+            <Text
+              style={getFontSizeAndLineHeight("3xl")}
+              className="text-gray-700 font-outfit-bold mb-2"
+            >
               Welcome back!
             </Text>
-            <Text className="text-gray-600 text-base font-outfit-regular">
+            <Text
+              style={getFontSizeAndLineHeight("base")}
+              className="text-gray-600 text-base font-outfit-regular"
+            >
               Sign in to your account to continue
             </Text>
           </View>
 
           <ControlledInput
+            required
             name="email"
             control={control}
-            label="Email *"
+            label="Email"
             placeholder="Enter your email"
             keyboardType="email-address"
             autoCapitalize="none"
@@ -103,9 +110,10 @@ const Login = () => {
           />
 
           <ControlledInput
+            required
             name="password"
             control={control}
-            label="Password *"
+            label="Password"
             placeholder="Enter your password"
             secureTextEntry={!showPassword}
             autoCapitalize="none"
@@ -130,19 +138,38 @@ const Login = () => {
               onToggle={() => setRememberMe(!rememberMe)}
               label="Remember me"
             />
-            <Link
+            <TouchableOpacity
               onPress={() => router.push("/(auth)/forgot-password")}
-              style={{ flexShrink: 0 }}
             >
-              Forgot password?
-            </Link>
+              <Text
+                style={getFontSizeAndLineHeight("sm")}
+                className="text-blue-600 font-outfit-regular"
+              >
+                Forgot password?
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <Text className="text-gray-600 text-sm font-outfit-regular text-center mb-6">
+          {/* <Text
+            style={getFontSizeAndLineHeight("sm")}
+            className="text-gray-600 font-outfit-regular mb-6"
+          >
             By signing in, you agree to our{" "}
-            <Text className="text-blue-500">Terms of use</Text> and{" "}
-            <Text className="text-blue-500">Privacy Policy</Text>.
-          </Text>
+            <Text
+              style={getFontSizeAndLineHeight("sm")}
+              className="text-blue-500 font-outfit-regular"
+            >
+              Terms of use
+            </Text>{" "}
+            and{" "}
+            <Text
+              style={getFontSizeAndLineHeight("sm")}
+              className="text-blue-500 font-outfit-regular"
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text> */}
 
           <Button
             title="Login"
@@ -152,15 +179,20 @@ const Login = () => {
           />
 
           <View className="flex-row justify-center items-center flex-wrap">
-            <Text className="text-gray-600 text-sm font-outfit-regular">
+            <Text
+              style={getFontSizeAndLineHeight("sm")}
+              className="text-gray-600 font-outfit-regular"
+            >
               Don't have an account?{" "}
             </Text>
-            <Link
-              onPress={() => router.push("/(auth)/signup")}
-              style={{ flexShrink: 0 }}
-            >
-              Sign up
-            </Link>
+            <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
+              <Text
+                style={getFontSizeAndLineHeight("sm")}
+                className="text-blue-600 font-outfit-regular"
+              >
+                Sign up
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAwareScrollView>

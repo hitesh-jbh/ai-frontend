@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as WebBrowser from "expo-web-browser";
+import { showErrorToast } from "../../utils/toast";
 
 // Video Player Component
 const VideoPlayerComponent: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
@@ -233,28 +234,28 @@ export default function ViewResource() {
     );
   }
 
-  // Access control: Only show resource if user owns it
-  if (!isLoading && (!resourceData || !isOwner)) {
+  // Access control: Show resource if it exists (public viewing allowed for search results)
+  if (!isLoading && !resourceData) {
     return (
       <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
         <ScreenHeader title="Resource" showBackButton />
         <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="lock-closed" size={48} color="#EF4444" />
+          <Ionicons name="alert-circle" size={48} color="#EF4444" />
           <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4 text-center">
-            {error ? "Resource not found" : "Access Denied"}
+            {error ? "Resource not found" : "Resource not found"}
           </Text>
           <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
             {error
               ? "This resource could not be loaded."
-              : "You can only view your own resources."}
+              : "This resource could not be found."}
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Type guard: ensure resourceData exists and user owns it
-  if (!resourceData || !isOwner) {
+  // Type guard: ensure resourceData exists
+  if (!resourceData) {
     return null;
   }
 
@@ -264,7 +265,7 @@ export default function ViewResource() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-6 py-4">
-          {/* Header with Edit Button */}
+          {/* Header with Edit Button (only show if owner) */}
           <View className="flex-row items-center justify-between mb-6">
             <View className="flex-1">
               <View className="flex-row items-center mb-2">
@@ -290,13 +291,15 @@ export default function ViewResource() {
                 {resourceData.title}
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={handleEdit}
-              className="p-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="pencil-outline" size={24} color="#3B82F6" />
-            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity
+                onPress={handleEdit}
+                className="p-2"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pencil-outline" size={24} color="#3B82F6" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Resource Content Based on Type */}

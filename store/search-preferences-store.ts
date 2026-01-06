@@ -10,19 +10,29 @@ export type SearchLayer =
 
 interface SearchPreferencesState {
   preferredLayer: SearchLayer;
-  setPreferredLayer: (layer: SearchLayer) => Promise<void>;
-  initialize: () => Promise<void>;
+  currentUserId: string | null;
+  setPreferredLayer: (layer: SearchLayer, userId: string) => Promise<void>;
+  initialize: (userId: string) => Promise<void>;
+  clearPreferences: () => Promise<void>;
 }
 
-const STORAGE_KEY = "search_preferred_layer";
+const getStorageKey = (userId: string) => `search_preferred_layer_${userId}`;
 
 export const useSearchPreferencesStore = create<SearchPreferencesState>(
-  (set) => ({
+  (set, get) => ({
     preferredLayer: "automatic", // Default to automatic
+    currentUserId: null,
 
-    initialize: async () => {
+    initialize: async (userId: string) => {
       try {
-        const stored = await SecureStore.getItemAsync(STORAGE_KEY);
+        // If user changed, reset to default first
+        if (get().currentUserId && get().currentUserId !== userId) {
+          set({ preferredLayer: "automatic", currentUserId: userId });
+        }
+
+        const storageKey = getStorageKey(userId);
+        const stored = await SecureStore.getItemAsync(storageKey);
+        
         if (stored) {
           const layer = stored as SearchLayer;
           // Validate the stored value
@@ -31,21 +41,40 @@ export const useSearchPreferencesStore = create<SearchPreferencesState>(
               layer
             )
           ) {
-            set({ preferredLayer: layer });
+            set({ preferredLayer: layer, currentUserId: userId });
+          } else {
+            set({ preferredLayer: "automatic", currentUserId: userId });
           }
+        } else {
+          set({ preferredLayer: "automatic", currentUserId: userId });
         }
       } catch (error) {
         console.error("Error initializing search preferences:", error);
         // Keep default value
+        set({ preferredLayer: "automatic", currentUserId: userId });
       }
     },
 
-    setPreferredLayer: async (layer: SearchLayer) => {
+    setPreferredLayer: async (layer: SearchLayer, userId: string) => {
       try {
-        await SecureStore.setItemAsync(STORAGE_KEY, layer);
-        set({ preferredLayer: layer });
+        const storageKey = getStorageKey(userId);
+        await SecureStore.setItemAsync(storageKey, layer);
+        set({ preferredLayer: layer, currentUserId: userId });
       } catch (error) {
         console.error("Error saving search preferences:", error);
+      }
+    },
+
+    clearPreferences: async () => {
+      try {
+        // Clear preferences for current user if exists
+        if (get().currentUserId) {
+          const storageKey = getStorageKey(get().currentUserId!);
+          await SecureStore.deleteItemAsync(storageKey);
+        }
+        set({ preferredLayer: "automatic", currentUserId: null });
+      } catch (error) {
+        console.error("Error clearing search preferences:", error);
       }
     },
   })

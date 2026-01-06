@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { showSuccessToast, showErrorToast, showInfoToast } from "../../utils/toast";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 
 const editResourceSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
@@ -80,16 +81,51 @@ export default function EditResource() {
         if (!result.canceled && result.assets[0]) {
           setFileUri(result.assets[0].uri);
         }
-      } else if (
-        resourceData?.type === "pdf" ||
-        resourceData?.type === "note"
-      ) {
-        // For PDFs and notes, file selection would require expo-document-picker
-        // For now, show an alert
-        showInfoToast(
-          "File Selection",
-          "PDF and note file selection requires expo-document-picker. Please install it or use the web interface."
-        );
+      } else if (resourceData?.type === "pdf") {
+        // Use document picker for PDFs
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "application/pdf",
+          copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled) {
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            if (asset.uri) {
+              setFileUri(asset.uri);
+              showSuccessToast("Success", `PDF selected: ${asset.name || "file"}`);
+            } else {
+              showErrorToast("Error", "File URI not found");
+            }
+          } else {
+            showErrorToast("Error", "No file selected");
+          }
+        }
+      } else if (resourceData?.type === "note") {
+        // Use document picker for notes
+        const result = await DocumentPicker.getDocumentAsync({
+          type: [
+            "application/pdf",
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+          copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled) {
+          if (result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            if (asset.uri) {
+              setFileUri(asset.uri);
+              showSuccessToast("Success", `File selected: ${asset.name || "file"}`);
+            } else {
+              showErrorToast("Error", "File URI not found");
+            }
+          } else {
+            showErrorToast("Error", "No file selected");
+          }
+        }
       }
     } catch (error) {
       showErrorToast("Error", "Failed to pick file");

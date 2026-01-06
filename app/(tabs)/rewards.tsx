@@ -279,9 +279,6 @@ export default function Rewards() {
                           <Text className="text-gray-900 text-base font-outfit-semi-bold">
                             +{reward.points} Points
                           </Text>
-                          <Text className="text-gray-600 text-sm font-outfit-regular">
-                            {reward.reason}
-                          </Text>
                         </View>
                       </View>
                     </View>

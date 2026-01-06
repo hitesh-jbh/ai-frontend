@@ -18,6 +18,7 @@ import {
 } from "../../lib/validations/auth.schema";
 import { Ionicons } from "@expo/vector-icons";
 import { showErrorToast, showSuccessToast } from "../../utils/toast";
+import { getFontSizeAndLineHeight } from "@/utils/font-scale";
 
 const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -93,10 +94,16 @@ const Signup = () => {
       >
         <View className="px-6 py-4">
           <View className="mb-8">
-            <Text className="text-gray-900 text-3xl font-outfit-bold mb-2">
+            <Text
+              style={getFontSizeAndLineHeight("3xl")}
+              className="text-gray-700 font-outfit-bold mb-2"
+            >
               Register
             </Text>
-            <Text className="text-gray-600 text-base font-outfit-regular">
+            <Text
+              style={getFontSizeAndLineHeight("base")}
+              className="text-gray-600 text-base font-outfit-regular"
+            >
               Join our community today
             </Text>
           </View>
@@ -196,15 +203,20 @@ const Signup = () => {
           />
 
           <View className="flex-row justify-center items-center">
-            <Text className="text-gray-600 text-sm font-outfit-regular">
+            <Text
+              style={getFontSizeAndLineHeight("sm")}
+              className="text-gray-600 font-outfit-regular"
+            >
               Already have an account?{" "}
             </Text>
-            <Link
-              onPress={() => router.push("/(auth)/login")}
-              style={{ flexShrink: 0, minWidth: "auto" }}
-            >
-              Login
-            </Link>
+            <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
+              <Text
+                style={getFontSizeAndLineHeight("sm")}
+                className="text-blue-600 font-outfit-regular"
+              >
+                Login
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAwareScrollView>

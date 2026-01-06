@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSearchPreferencesStore, SearchLayer } from "../../store/search-preferences-store";
+import { useAuthStore } from "../../store/auth-store";
 
 interface SearchLayerBottomSheetProps {
   visible: boolean;
@@ -66,9 +67,12 @@ export const SearchLayerBottomSheet: React.FC<SearchLayerBottomSheetProps> = ({
   onClose,
 }) => {
   const { preferredLayer, setPreferredLayer } = useSearchPreferencesStore();
+  const { user } = useAuthStore();
 
   const handleSelectLayer = async (layer: SearchLayer) => {
-    await setPreferredLayer(layer);
+    if (user?.id) {
+      await setPreferredLayer(layer, user.id);
+    }
     onClose();
   };
 

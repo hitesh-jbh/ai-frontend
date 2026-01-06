@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { authService } from "../services/auth.service";
 import * as SecureStore from "expo-secure-store";
 import { useSubscriptionStore } from "./subscription-store";
+import { useSearchPreferencesStore } from "./search-preferences-store";
 
 interface User {
   id: string;
@@ -58,6 +59,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isAuthenticated: false, user: null, isLoading: false });
       // Clear subscription store on logout
       useSubscriptionStore.getState().clearSubscription();
+      // Clear search preferences on logout
+      useSearchPreferencesStore.getState().clearPreferences();
       // Note: React Query cache should be cleared in the component that calls logout
       // (e.g., options.tsx already does queryClient.clear())
     }

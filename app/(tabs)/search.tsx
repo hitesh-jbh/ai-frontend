@@ -27,6 +27,8 @@ import {
   showSuccessToast,
 } from "../../utils/toast";
 import { SearchLayerBottomSheet } from "../../components/search/SearchLayerBottomSheet";
+import { scaleFont, scaleLineHeight } from "../../utils/font-scale";
+import * as WebBrowser from "expo-web-browser";
 
 interface PendingAdTracking {
   query: string;
@@ -47,6 +49,7 @@ export default function Search() {
   const [isShowingAd, setIsShowingAd] = useState(false);
   const [pendingAdTracking, setPendingAdTracking] =
     useState<PendingAdTracking | null>(null);
+  const [isUpvoted, setIsUpvoted] = useState<boolean>(false);
   const searchInputRef = useRef<TextInput>(null);
   const { search, subscription, searchAdRevenue } = useServices();
   const queryClient = useQueryClient();
@@ -55,10 +58,12 @@ export default function Search() {
   const { preferredLayer, initialize: initializePreferences } =
     useSearchPreferencesStore();
 
-  // Initialize preferences on mount
+  // Initialize preferences on mount and when user changes
   useEffect(() => {
-    initializePreferences();
-  }, [initializePreferences]);
+    if (user?.id) {
+      initializePreferences(user.id);
+    }
+  }, [initializePreferences, user?.id]);
 
   // Fetch subscription status on mount
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
@@ -240,10 +245,11 @@ export default function Search() {
   // Use searchTrigger for actual search, debouncedQuery for suggestions
   const activeQuery = searchTrigger || "";
 
-  // Fetch search history
+  // Fetch search history (user-specific)
   const { data: searchHistory } = useQuery({
-    queryKey: ["searchHistory"],
+    queryKey: ["searchHistory", user?.id],
     queryFn: () => search.getSearchHistory(10),
+    enabled: !!user?.id,
     staleTime: 60000, // Cache for 1 minute
   });
 
@@ -292,8 +298,20 @@ export default function Search() {
           adType: pendingAdTracking.adType,
           revenue: pendingAdTracking.revenue,
         })
-        .catch((error) => {
-          console.error("Error tracking ad revenue:", error);
+        .catch((error: any) => {
+          // Log detailed error for debugging
+          console.error("Error tracking ad revenue:", {
+            error: error?.message || error,
+            response: error?.response?.data,
+            status: error?.response?.status,
+            data: {
+              query: pendingAdTracking.query,
+              source: searchResult.source,
+              answerId: searchResult.answerId,
+              adType: pendingAdTracking.adType,
+              revenue: pendingAdTracking.revenue,
+            },
+          });
           // Don't show error to user - tracking failure shouldn't block search
         });
 
@@ -362,10 +380,27 @@ export default function Search() {
   // Upvote answer mutation
   const upvoteMutation = useMutation({
     mutationFn: (answerId: string) => search.upvoteAnswer(answerId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Update local state based on response (true = upvoted, false = removed)
+      setIsUpvoted(data.upvoted);
       queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
     },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to upvote answer";
+      showErrorToast("Error", errorMessage);
+    },
   });
+
+  // Reset upvote state when search result changes
+  useEffect(() => {
+    if (searchResult?.answerId) {
+      // Reset to false when answer changes - we'll update it after first upvote
+      setIsUpvoted(false);
+    }
+  }, [searchResult?.answerId]);
 
   const handleSuggestionSelect = (suggestion: string) => {
     const trimmed = suggestion.trim();
@@ -483,7 +518,13 @@ export default function Search() {
         {(isLoading || isShowingAd) && (
           <View className="items-center justify-center py-20">
             <ActivityIndicator size="large" color="#3B82F6" />
-            <Text className="text-gray-600 text-sm font-outfit-regular mt-4">
+            <Text
+              className="text-gray-600 font-outfit-regular mt-4"
+              style={{
+                fontSize: scaleFont(12),
+                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+              }}
+            >
               {isShowingAd ? "Loading..." : "Searching..."}
             </Text>
           </View>
@@ -492,10 +533,22 @@ export default function Search() {
         {error && (
           <View className="items-center justify-center py-20">
             <Ionicons name="alert-circle" size={48} color="#EF4444" />
-            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
+            <Text
+              className="text-gray-900 font-outfit-semi-bold mt-4"
+              style={{
+                fontSize: scaleFont(18),
+                lineHeight: scaleLineHeight(scaleFont(18), 1.3),
+              }}
+            >
               Search failed
             </Text>
-            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+            <Text
+              className="text-gray-600 font-outfit-regular mt-2 text-center"
+              style={{
+                fontSize: scaleFont(12),
+                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+              }}
+            >
               Please try again
             </Text>
           </View>
@@ -511,10 +564,14 @@ export default function Search() {
                 )}`}
               >
                 <Text
-                  className={`text-xs font-outfit-semi-bold ${
+                  className={`font-outfit-semi-bold ${
                     getSourceBadgeColor(searchResult.source).split(" ")[1] ||
                     "text-gray-700"
                   }`}
+                  style={{
+                    fontSize: scaleFont(10),
+                    lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                  }}
                 >
                   {getSourceLabel(searchResult.source)}
                 </Text>
@@ -522,19 +579,279 @@ export default function Search() {
               {searchResult.qualityScore > 0 && (
                 <View className="flex-row items-center">
                   <Ionicons name="star" size={18} color="#F59E0B" />
-                  <Text className="text-gray-700 text-sm font-outfit-semi-bold ml-1">
+                  <Text
+                    className="text-gray-700 font-outfit-semi-bold ml-1"
+                    style={{
+                      fontSize: scaleFont(12),
+                      lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                    }}
+                  >
                     {Math.round(searchResult.qualityScore * 100)}%
                   </Text>
                 </View>
               )}
             </View>
 
-            {/* Answer Text - Better formatted */}
+            {/* Show answer text for all layers (including competitive) */}
             <View className="bg-gray-50 rounded-2xl p-5 mb-4">
-              <Text className="text-gray-900 text-lg font-outfit-regular leading-7">
+              <Text
+                className="text-gray-900 font-outfit-regular"
+                style={{
+                  fontSize: scaleFont(18),
+                  lineHeight: scaleLineHeight(scaleFont(18), 1.3),
+                }}
+              >
                 {searchResult.answer}
               </Text>
             </View>
+
+            {/* All Community Answers (if multiple exist) */}
+            {searchResult.communityAnswers && 
+             searchResult.communityAnswers.length > 1 && (
+              <View className="mb-4">
+                <Text
+                  className="text-gray-900 font-outfit-semi-bold mb-3"
+                  style={{
+                    fontSize: scaleFont(16),
+                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                  }}
+                >
+                  Other Community Answers ({searchResult.communityAnswers.length - 1})
+                </Text>
+                {searchResult.communityAnswers.slice(1).map((communityAnswer, index) => (
+                  <View
+                    key={communityAnswer.answerId}
+                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
+                  >
+                    <Text
+                      className="text-gray-900 font-outfit-regular mb-3"
+                      style={{
+                        fontSize: scaleFont(16),
+                        lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                      }}
+                    >
+                      {communityAnswer.answer}
+                    </Text>
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center">
+                        {communityAnswer.upvotes > 0 && (
+                          <View className="flex-row items-center mr-3">
+                            <Ionicons name="thumbs-up" size={16} color="#6B7280" />
+                            <Text
+                              className="text-gray-700 font-outfit-regular ml-1"
+                              style={{
+                                fontSize: scaleFont(12),
+                                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                              }}
+                            >
+                              {communityAnswer.upvotes} upvotes
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {communityAnswer.answerUserId !== user?.id && (
+                        <TouchableOpacity
+                          className="bg-purple-500 rounded-lg px-4 py-2"
+                          onPress={() => {
+                            upvoteMutation.mutate(communityAnswer.answerId);
+                          }}
+                          disabled={upvoteMutation.isPending}
+                          activeOpacity={0.8}
+                        >
+                          <View className="flex-row items-center">
+                            <Ionicons name="thumbs-up" size={16} color="#FFFFFF" />
+                            <Text
+                              className="text-white font-outfit-semi-bold ml-1"
+                              style={{
+                                fontSize: scaleFont(12),
+                                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                              }}
+                            >
+                              Upvote
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Remove duplicate web results section - already shown above */}
+            {false && searchResult.source !== "competitive" && searchResult.webResults && searchResult.webResults.length > 0 && (
+              <View className="mb-4">
+                <Text
+                  className="text-gray-900 font-outfit-semi-bold mb-3"
+                  style={{
+                    fontSize: scaleFont(16),
+                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                  }}
+                >
+                  Top Results
+                </Text>
+                {searchResult.webResults.map((result, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
+                    onPress={async () => {
+                      // Open in-app browser (expanded result - full screen)
+                      try {
+                        await WebBrowser.openBrowserAsync(result.url, {
+                          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                          enableBarCollapsing: false,
+                          controlsColor: "#3B82F6",
+                          toolbarColor: "#FFFFFF",
+                        });
+                      } catch (error) {
+                        console.error("Error opening browser:", error);
+                        showErrorToast("Failed to open link. Please try again.");
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      className="text-blue-600 font-outfit-semi-bold mb-1"
+                      style={{
+                        fontSize: scaleFont(14),
+                        lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                      }}
+                      numberOfLines={2}
+                    >
+                      {result.title}
+                    </Text>
+                    <Text
+                      className="text-gray-600 font-outfit-regular mb-2"
+                      style={{
+                        fontSize: scaleFont(12),
+                        lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                      }}
+                      numberOfLines={2}
+                    >
+                      {result.snippet}
+                    </Text>
+                    <Text
+                      className="text-gray-400 font-outfit-regular text-xs"
+                      style={{
+                        fontSize: scaleFont(10),
+                        lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                      }}
+                      numberOfLines={1}
+                    >
+                      {result.url}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Matched Resources (Community Layer) */}
+            {searchResult.matchedResources && searchResult.matchedResources.length > 0 && (
+              <View className="mb-4">
+                <Text
+                  className="text-gray-900 font-outfit-semi-bold mb-3"
+                  style={{
+                    fontSize: scaleFont(16),
+                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                  }}
+                >
+                  Related Resources
+                </Text>
+                {searchResult.matchedResources.map((resource) => (
+                  <TouchableOpacity
+                    key={resource.id}
+                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
+                    onPress={async () => {
+                      // Navigate to resource view - this will track the view automatically
+                      router.push(`/(tabs)/view-resource?id=${resource.id}`);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View className="flex-row items-start">
+                      <View
+                        className="rounded-lg p-2 mr-3"
+                        style={{
+                          backgroundColor:
+                            resource.type === "video"
+                              ? "#3B82F620"
+                              : resource.type === "pdf"
+                              ? "#EF444420"
+                              : resource.type === "note"
+                              ? "#10B98120"
+                              : "#F59E0B20",
+                        }}
+                      >
+                        <Ionicons
+                          name={
+                            resource.type === "video"
+                              ? "videocam"
+                              : resource.type === "pdf"
+                              ? "document-text"
+                              : resource.type === "note"
+                              ? "document"
+                              : "link"
+                          }
+                          size={24}
+                          color={
+                            resource.type === "video"
+                              ? "#3B82F6"
+                              : resource.type === "pdf"
+                              ? "#EF4444"
+                              : resource.type === "note"
+                              ? "#10B981"
+                              : "#F59E0B"
+                          }
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <Text
+                          className="text-gray-900 font-outfit-semi-bold mb-1"
+                          style={{
+                            fontSize: scaleFont(14),
+                            lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                          }}
+                          numberOfLines={2}
+                        >
+                          {resource.title}
+                        </Text>
+                        <View className="flex-row items-center mt-1">
+                          <View
+                            className="rounded px-2 py-0.5 mr-2"
+                            style={{
+                              backgroundColor:
+                                resource.type === "video"
+                                  ? "#3B82F610"
+                                  : resource.type === "pdf"
+                                  ? "#EF444410"
+                                  : resource.type === "note"
+                                  ? "#10B98110"
+                                  : "#F59E0B10",
+                            }}
+                          >
+                            <Text
+                              className="text-xs font-outfit-semi-bold uppercase"
+                              style={{
+                                color:
+                                  resource.type === "video"
+                                    ? "#3B82F6"
+                                    : resource.type === "pdf"
+                                    ? "#EF4444"
+                                    : resource.type === "note"
+                                    ? "#10B981"
+                                    : "#F59E0B",
+                              }}
+                            >
+                              {resource.type}
+                            </Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             {/* Metadata - Cleaner */}
             <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100">
@@ -543,7 +860,13 @@ export default function Search() {
                   searchResult.upvotes > 0 && (
                     <View className="flex-row items-center">
                       <Ionicons name="thumbs-up" size={18} color="#6B7280" />
-                      <Text className="text-gray-700 text-sm font-outfit-regular ml-1">
+                      <Text
+                        className="text-gray-700 font-outfit-regular ml-1"
+                        style={{
+                          fontSize: scaleFont(12),
+                          lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                        }}
+                      >
                         {searchResult.upvotes} upvotes
                       </Text>
                     </View>
@@ -551,7 +874,13 @@ export default function Search() {
                 {searchResult.tokensUsed > 0 && (
                   <View className="flex-row items-center">
                     <Ionicons name="flash" size={16} color="#6B7280" />
-                    <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
+                    <Text
+                      className="text-gray-600 font-outfit-regular ml-1"
+                      style={{
+                        fontSize: scaleFont(10),
+                        lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                      }}
+                    >
                       {searchResult.tokensUsed} tokens
                     </Text>
                   </View>
@@ -561,9 +890,38 @@ export default function Search() {
 
             {/* Action Buttons */}
             <View className="flex-row gap-3">
-              {searchResult.source === "community" && searchResult.answerId && (
+              {/* Show upvote button only if:
+                  1. Source is community
+                  2. answerId exists
+                  3. Current user is NOT the answer owner (can't upvote own answer)
+              */}
+              {(() => {
+                const isCommunity = searchResult.source === "community";
+                const hasAnswerId = !!searchResult.answerId;
+                const isNotOwner = !searchResult.answerUserId || searchResult.answerUserId !== user?.id;
+                const shouldShow = isCommunity && hasAnswerId && isNotOwner;
+                
+                // Debug logging
+                if (isCommunity) {
+                  console.log("[Upvote Button Debug]", {
+                    source: searchResult.source,
+                    answerId: searchResult.answerId,
+                    answerUserId: searchResult.answerUserId,
+                    currentUserId: user?.id,
+                    isCommunity,
+                    hasAnswerId,
+                    isNotOwner,
+                    shouldShow,
+                    fullSearchResult: JSON.stringify(searchResult, null, 2),
+                  });
+                }
+                
+                return shouldShow;
+              })() && (
                 <TouchableOpacity
-                  className="flex-1 bg-purple-500 rounded-xl py-3.5 items-center shadow-sm"
+                  className={`flex-1 rounded-xl py-3.5 items-center shadow-sm ${
+                    isUpvoted ? "bg-green-500" : "bg-purple-500"
+                  }`}
                   onPress={() => {
                     upvoteMutation.mutate(searchResult.answerId!);
                   }}
@@ -571,9 +929,23 @@ export default function Search() {
                   activeOpacity={0.8}
                 >
                   <View className="flex-row items-center">
-                    <Ionicons name="thumbs-up" size={20} color="#FFFFFF" />
-                    <Text className="text-white text-base font-outfit-semi-bold ml-2">
-                      {upvoteMutation.isPending ? "..." : "Upvote"}
+                    <Ionicons 
+                      name={isUpvoted ? "checkmark-circle" : "thumbs-up"} 
+                      size={20} 
+                      color="#FFFFFF" 
+                    />
+                    <Text
+                      className="text-white font-outfit-semi-bold ml-2"
+                      style={{
+                        fontSize: scaleFont(14),
+                        lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                      }}
+                    >
+                      {upvoteMutation.isPending 
+                        ? "..." 
+                        : isUpvoted 
+                        ? "Upvoted" 
+                        : "Upvote"}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -585,7 +957,13 @@ export default function Search() {
               >
                 <View className="flex-row items-center">
                   <Ionicons name="create-outline" size={20} color="#FFFFFF" />
-                  <Text className="text-white text-base font-outfit-semi-bold ml-2">
+                  <Text
+                    className="text-white font-outfit-semi-bold ml-2"
+                    style={{
+                      fontSize: scaleFont(14),
+                      lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                    }}
+                  >
                     Contribute Answer
                   </Text>
                 </View>
@@ -620,7 +998,13 @@ export default function Search() {
               onPress={() => router.push("/(tabs)/manage-subscriptions")}
               activeOpacity={0.7}
             >
-              <Text className="text-white text-base font-outfit-semi-bold">
+              <Text
+                className="text-white font-outfit-semi-bold"
+                style={{
+                  fontSize: scaleFont(14),
+                  lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                }}
+              >
                 Choose a Plan
               </Text>
             </TouchableOpacity>
@@ -652,16 +1036,37 @@ export default function Search() {
                         activeOpacity={0.7}
                       >
                         <View className="flex-1">
-                          <Text className="text-gray-900 text-base font-outfit-regular">
+                          <Text
+                            className="text-gray-900 font-outfit-regular"
+                            style={{
+                              fontSize: scaleFont(14),
+                              lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                            }}
+                          >
                             {item.query}
                           </Text>
                           <View className="flex-row items-center mt-1">
                             {item.resultCount > 0 && (
-                              <Text className="text-gray-500 text-xs font-outfit-regular mr-3">
+                              <Text
+                                className="text-gray-500 font-outfit-regular mr-3"
+                                style={{
+                                  fontSize: scaleFont(10),
+                                  lineHeight: scaleLineHeight(
+                                    scaleFont(10),
+                                    1.5
+                                  ),
+                                }}
+                              >
                                 {item.resultCount} results
                               </Text>
                             )}
-                            <Text className="text-gray-400 text-xs font-outfit-regular">
+                            <Text
+                              className="text-gray-400 font-outfit-regular"
+                              style={{
+                                fontSize: scaleFont(10),
+                                lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                              }}
+                            >
                               {new Date(item.createdAt).toLocaleDateString()}
                             </Text>
                           </View>
@@ -736,10 +1141,22 @@ export default function Search() {
               >
                 <View className="p-6">
                   <View className="mb-4">
-                    <Text className="text-gray-700 text-sm font-outfit-regular mb-2">
+                    <Text
+                      className="text-gray-700 font-outfit-regular mb-2"
+                      style={{
+                        fontSize: scaleFont(12),
+                        lineHeight: scaleLineHeight(scaleFont(12), 1.4),
+                      }}
+                    >
                       Question: {searchQuery}
                     </Text>
-                    <Text className="text-gray-900 text-base font-outfit-semi-bold mb-3">
+                    <Text
+                      className="text-gray-900 font-outfit-semi-bold mb-3"
+                      style={{
+                        fontSize: scaleFont(14),
+                        lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                      }}
+                    >
                       Your Answer
                     </Text>
                     <TextInput
@@ -772,7 +1189,13 @@ export default function Search() {
                     {submitAnswerMutation.isPending ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Text className="text-white text-base font-outfit-semi-bold">
+                      <Text
+                        className="text-white font-outfit-semi-bold"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                      >
                         Submit Answer
                       </Text>
                     )}

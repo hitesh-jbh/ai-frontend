@@ -27,7 +27,23 @@ export interface SearchResult {
   layer: string;
   query: string;
   answerId?: string; // For upvoting community answers
+  answerUserId?: string; // User ID of the answer creator (to check if current user is owner)
   webResults?: Array<{ title: string; snippet: string; url: string }>; // For competitive layer: top 3 raw web results
+  matchedResources?: Array<{ // For community layer: matched vault resources
+    id: string;
+    title: string;
+    type: "pdf" | "video" | "note" | "link";
+    fileUrl?: string;
+    userId: string;
+    vaultId: string;
+  }>;
+  communityAnswers?: Array<{ // All community answers for the query
+    answer: string;
+    answerId: string;
+    answerUserId: string;
+    upvotes: number;
+    qualityScore: number;
+  }>;
 }
 
 export interface SearchSuggestion {

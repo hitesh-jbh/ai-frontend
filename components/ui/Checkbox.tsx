@@ -1,6 +1,7 @@
 import React from "react";
 import { TouchableOpacity, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getFontSizeAndLineHeight } from "@/utils/font-scale";
 
 interface CheckboxProps {
   checked: boolean;
@@ -26,7 +27,12 @@ export const Checkbox: React.FC<CheckboxProps> = ({
       >
         {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
       </View>
-      <Text className="text-gray-800 text-sm font-outfit-regular">{label}</Text>
+      <Text
+        style={getFontSizeAndLineHeight("sm")}
+        className="text-gray-800 font-outfit-regular"
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 };

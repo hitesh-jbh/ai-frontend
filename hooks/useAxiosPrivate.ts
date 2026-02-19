@@ -1,9 +1,10 @@
-import { useEffect } from "react";
-import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { useEffect } from "react";
+import { Platform } from "react-native";
 import { axiosInstance } from "../lib/axios";
-import { useAuthStore } from "../store/auth-store";
 import { authService } from "../services/auth.service";
+import { useAuthStore } from "../store/auth-store";
 import { toast } from "./use-toast";
 
 const useAxiosPrivate = () => {
@@ -64,12 +65,22 @@ const useAxiosPrivate = () => {
               console.log("User tokens updated successfully");
             } else {
               console.warn("No user in store when refreshing token");
-              // Still save tokens to SecureStore even if no user in store
-              const { default: SecureStore } = await import(
-                "expo-secure-store"
-              );
-              await SecureStore.setItemAsync("accessToken", data.accessToken);
-              await SecureStore.setItemAsync("refreshToken", data.refreshToken);
+              // Still save tokens to SecureStore even if no user in store (SecureStore not available on web)
+              if (Platform.OS !== "web") {
+                const SecureStoreModule = await import("expo-secure-store");
+                const SecureStore =
+                  SecureStoreModule.default ?? SecureStoreModule;
+                if (SecureStore?.setItemAsync) {
+                  await SecureStore.setItemAsync(
+                    "accessToken",
+                    data.accessToken
+                  );
+                  await SecureStore.setItemAsync(
+                    "refreshToken",
+                    data.refreshToken
+                  );
+                }
+              }
             }
 
             // Update the original request with new token

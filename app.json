@@ -42,16 +42,32 @@
         }
       ],
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-1734017348738520~1626446358",
-          "iosAppId": "ca-app-pub-1734017348738520~1626446358"
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3ed8c6b0-2d46-4f87-acc7-85e8677184f5"
+      }
     }
   }
 }

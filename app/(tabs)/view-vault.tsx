@@ -1,27 +1,27 @@
-import React from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
-import { Image } from "expo-image";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   useInfiniteQuery,
   useMutation,
-  useQueryClient,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { router, useLocalSearchParams } from "expo-router";
+import React from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { Resource } from "../../services/resource.service";
-import { ScreenHeader } from "../../components/ui/ScreenHeader";
-import { Ionicons } from "@expo/vector-icons";
-import { showSuccessToast, showErrorToast } from "../../utils/toast";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -43,14 +43,20 @@ export default function ViewVault() {
   const { vault, resource } = useServices();
   const queryClient = useQueryClient();
 
-  // Fetch vault details
+  // Fetch vault details (own vault first, then fallback to by-id for saved/followed)
   const {
     data: vaultData,
     isLoading: isLoadingVault,
     error: vaultError,
   } = useQuery({
     queryKey: ["vault", id],
-    queryFn: () => vault.getVault(id!),
+    queryFn: async () => {
+      try {
+        return await vault.getVault(id!);
+      } catch {
+        return await vault.getVaultById(id!);
+      }
+    },
     enabled: !!id,
   });
 
@@ -91,13 +97,13 @@ export default function ViewVault() {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
       queryClient.invalidateQueries({ queryKey: ["vault", id] });
-      
+
       // Invalidate leaderboard and analytics queries
       queryClient.invalidateQueries({ queryKey: ["topEarners"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
       queryClient.invalidateQueries({ queryKey: ["analyticsChart"] });
-      
+
       showSuccessToast("Success", "Resource deleted successfully");
     },
     onError: () => {
@@ -116,7 +122,7 @@ export default function ViewVault() {
           style: "destructive",
           onPress: () => deleteResourceMutation.mutate(resourceId),
         },
-      ]
+      ],
     );
   };
 

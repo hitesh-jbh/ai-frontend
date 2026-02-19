@@ -1,15 +1,14 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { useAuthStore } from "../../store/auth-store";
@@ -19,6 +18,8 @@ import { Image } from "expo-image";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as WebBrowser from "expo-web-browser";
 import { showErrorToast } from "../../utils/toast";
+
+type UserVote = "up" | "down" | null;
 
 // Video Player Component
 const VideoPlayerComponent: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
@@ -48,6 +49,12 @@ export default function ViewResource() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { resource } = useServices();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const [userVote, setUserVote] = useState<UserVote>(null);
+  const [votePending, setVotePending] = useState(false);
+  const [upvotes, setUpvotes] = useState(0);
+  const [downvotes, setDownvotes] = useState(0);
 
   const {
     data: resourceData,
@@ -59,8 +66,59 @@ export default function ViewResource() {
     enabled: !!id && !!user,
   });
 
-  // Check if user owns this resource
+  // Check if user owns this resource (prevent voting on own)
   const isOwner = resourceData?.userId === user?.id;
+  const canVote = !!id && !!user && !isOwner;
+
+  const handleUpvote = useCallback(async () => {
+    if (!canVote || votePending || !id) return;
+    setVotePending(true);
+    try {
+      const result = await resource.upvoteResource(id);
+      setUserVote(result.voteType);
+      if (result.voteType === "up") {
+        setUpvotes((u) => u + 1);
+        if (userVote === "down") setDownvotes((d) => (d > 0 ? d - 1 : 0));
+      } else {
+        if (userVote === "up") setUpvotes((u) => (u > 0 ? u - 1 : 0));
+        if (userVote === "down") setDownvotes((d) => (d > 0 ? d - 1 : 0));
+      }
+      queryClient.setQueryData(["resource", id], (old: Resource | undefined) =>
+        old ? { ...old } : old
+      );
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || err?.message || "Vote failed";
+      showErrorToast("Error", msg);
+    } finally {
+      setVotePending(false);
+    }
+  }, [canVote, votePending, id, resource, userVote, queryClient]);
+
+  const handleDownvote = useCallback(async () => {
+    if (!canVote || votePending || !id) return;
+    setVotePending(true);
+    try {
+      const result = await resource.downvoteResource(id);
+      setUserVote(result.voteType);
+      if (result.voteType === "down") {
+        setDownvotes((d) => d + 1);
+        if (userVote === "up") setUpvotes((u) => (u > 0 ? u - 1 : 0));
+      } else {
+        if (userVote === "up") setUpvotes((u) => (u > 0 ? u - 1 : 0));
+        if (userVote === "down") setDownvotes((d) => (d > 0 ? d - 1 : 0));
+      }
+      queryClient.setQueryData(["resource", id], (old: Resource | undefined) =>
+        old ? { ...old } : old
+      );
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || err?.message || "Vote failed";
+      showErrorToast("Error", msg);
+    } finally {
+      setVotePending(false);
+    }
+  }, [canVote, votePending, id, resource, userVote, queryClient]);
 
   const handleEdit = () => {
     router.push(`/(tabs)/edit-resource?id=${id}`);
@@ -69,7 +127,7 @@ export default function ViewResource() {
   const handleOpenLink = async (url: string) => {
     try {
       await WebBrowser.openBrowserAsync(url);
-    } catch (error) {
+    } catch {
       showErrorToast("Error", "Failed to open link");
     }
   };
@@ -301,6 +359,61 @@ export default function ViewResource() {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Upvote / Downvote */}
+          {user && (
+            <View className="flex-row items-center gap-4 mb-6">
+              <TouchableOpacity
+                onPress={handleUpvote}
+                disabled={!canVote || votePending}
+                className="flex-row items-center gap-2 px-4 py-2 rounded-lg border border-gray-200"
+                style={{
+                  backgroundColor: userVote === "up" ? "#DBEAFE" : "transparent",
+                  opacity: !canVote || votePending ? 0.6 : 1,
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={userVote === "up" ? "thumbs-up" : "thumbs-up-outline"}
+                  size={22}
+                  color={userVote === "up" ? "#2563EB" : "#6B7280"}
+                />
+                <Text
+                  className="text-sm font-outfit-semi-bold"
+                  style={{ color: userVote === "up" ? "#2563EB" : "#6B7280" }}
+                >
+                  Upvote {upvotes > 0 ? `(${upvotes})` : ""}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleDownvote}
+                disabled={!canVote || votePending}
+                className="flex-row items-center gap-2 px-4 py-2 rounded-lg border border-gray-200"
+                style={{
+                  backgroundColor:
+                    userVote === "down" ? "#FEE2E2" : "transparent",
+                  opacity: !canVote || votePending ? 0.6 : 1,
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={
+                    userVote === "down"
+                      ? "thumbs-down"
+                      : "thumbs-down-outline"
+                  }
+                  size={22}
+                  color={userVote === "down" ? "#DC2626" : "#6B7280"}
+                />
+                <Text
+                  className="text-sm font-outfit-semi-bold"
+                  style={{ color: userVote === "down" ? "#DC2626" : "#6B7280" }}
+                >
+                  Downvote {downvotes > 0 ? `(${downvotes})` : ""}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Resource Content Based on Type */}
           {renderResourceContent(resourceData)}

@@ -9,6 +9,9 @@ import { createProfileService } from "../services/profile.service";
 import { createRewardService } from "../services/reward.service";
 import { createSubscriptionService } from "../services/subscription.service";
 import { createCoinRedemptionService } from "../services/coin-redemption.service";
+import { createThreadService } from "../services/thread.service";
+import { createWalletService } from "../services/wallet.service";
+import { createPlatformStatsService } from "../services/platform-stats.service";
 import { createSearchAdRevenueService } from "../services/search-ad-revenue.service";
 
 export const useServices = () => {
@@ -25,6 +28,9 @@ export const useServices = () => {
       reward: createRewardService(axiosInstance),
       subscription: createSubscriptionService(axiosInstance),
       coinRedemption: createCoinRedemptionService(axiosInstance),
+      thread: createThreadService(axiosInstance),
+      wallet: createWalletService(axiosInstance),
+      platformStats: createPlatformStatsService(axiosInstance),
       searchAdRevenue: createSearchAdRevenueService(axiosInstance),
     };
     return services;

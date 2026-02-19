@@ -19,11 +19,22 @@ import { useAuthStore } from "../../store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
 import { ResponsiveText } from "@/utils/responsive-text";
+import {
+  formatStatValue,
+  formatPaidValue,
+} from "../../services/platform-stats.service";
 
 export default function Home() {
   const [profileImageError, setProfileImageError] = useState(false);
   const user = useAuthStore((state) => state.user);
-  const { leaderboard, profile } = useServices();
+  const { leaderboard, profile, platformStats } = useServices();
+
+  const { data: platformStatsData, isLoading: isLoadingStats } = useQuery({
+    queryKey: ["platformStats"],
+    queryFn: () => platformStats.getPlatformStats(),
+    enabled: !!user,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
   // Fetch latest profile data to get profile picture
   const { data: profileData } = useQuery({
@@ -152,10 +163,38 @@ export default function Home() {
 
         {/* Statistics */}
         <View className="flex-row mb-6 -mx-1">
-          <StatCard value="50K+" label="Creators" />
-          <StatCard value="2M+" label="Vaults" />
-          <StatCard value="10M+" label="Searches" />
-          <StatCard value="$5M+" label="Paid" />
+          <StatCard
+            value={
+              isLoadingStats
+                ? "..."
+                : formatStatValue(platformStatsData?.creators ?? 0)
+            }
+            label="Creators"
+          />
+          <StatCard
+            value={
+              isLoadingStats
+                ? "..."
+                : formatStatValue(platformStatsData?.vaults ?? 0)
+            }
+            label="Vaults"
+          />
+          <StatCard
+            value={
+              isLoadingStats
+                ? "..."
+                : formatStatValue(platformStatsData?.searches ?? 0)
+            }
+            label="Searches"
+          />
+          <StatCard
+            value={
+              isLoadingStats
+                ? "..."
+                : formatPaidValue(platformStatsData?.paid ?? 0)
+            }
+            label="Paid"
+          />
         </View>
 
         {/* Analytics */}

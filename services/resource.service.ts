@@ -163,4 +163,29 @@ export const createResourceService = (axiosInstance: AxiosInstance) => ({
   async deleteResource(id: string): Promise<void> {
     await axiosInstance.delete(`/resources/${id}`);
   },
+
+  async viewResource(id: string): Promise<Resource> {
+    const response = await axiosInstance.get<ApiResponse<Resource>>(
+      `/resources/view/${id}`
+    );
+    return response.data.data;
+  },
+
+  async upvoteResource(
+    id: string
+  ): Promise<{ upvoted: boolean; voteType: "up" | "down" | null }> {
+    const response = await axiosInstance.post<
+      ApiResponse<{ upvoted: boolean; voteType: "up" | "down" | null }>
+    >(`/resources/${id}/upvote`);
+    return response.data.data;
+  },
+
+  async downvoteResource(
+    id: string
+  ): Promise<{ downvoted: boolean; voteType: "up" | "down" | null }> {
+    const response = await axiosInstance.post<
+      ApiResponse<{ downvoted: boolean; voteType: "up" | "down" | null }>
+    >(`/resources/${id}/downvote`);
+    return response.data.data;
+  },
 });

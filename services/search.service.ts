@@ -9,41 +9,88 @@ export interface SearchFilters {
   tags?: string[];
 }
 
+export type AiPreference = "short" | "medium" | "deep_search";
+
 export interface SearchRequest {
   query: string;
+  threadId: string;
   filters?: SearchFilters;
-  preferredLayer?: "automatic" | "cache" | "competitive" | "community" | "paid_ai";
+  aiPreference?: AiPreference;
   limit?: number;
   offset?: number;
 }
 
+export interface CreateThreadResponse {
+  threadId: string;
+}
+
+export interface ThreadListItem {
+  id: string;
+  userId: string;
+  title: string | null;
+  createdAt: string;
+}
+
+export interface ThreadMessage {
+  role: "user" | "assistant";
+  content: string;
+  source?: string;
+  qualityScore?: number;
+  tokensUsed?: number;
+  answerId?: string;
+  answerUserId?: string;
+  communityAnswers?: any[];
+  matchedResources?: any[];
+}
+
+export interface ThreadWithMessages {
+  id: string;
+  userId: string;
+  title: string | null;
+  createdAt: string;
+  messages?: ThreadMessage[];
+}
+
 // NEW: Updated SearchResult to match new backend API
 export interface SearchResult {
-  answer: string;
-  source: "cache" | "web" | "competitive" | "community" | "free_ai" | "paid_ai";
+  answer: string; // Primary answer (for backward compatibility)
+  source: "vault" | "cache" | "web" | "competitive" | "community" | "free_ai" | "paid_ai";
   qualityScore: number;
   upvotes?: number;
   tokensUsed: number;
   layer: string;
   query: string;
-  answerId?: string; // For upvoting community answers
-  answerUserId?: string; // User ID of the answer creator (to check if current user is owner)
-  webResults?: Array<{ title: string; snippet: string; url: string }>; // For competitive layer: top 3 raw web results
-  matchedResources?: Array<{ // For community layer: matched vault resources
+  answerId?: string; // For upvoting community answers (primary answer)
+  answerUserId?: string | null; // User ID of the answer creator (to check if current user is owner)
+  webResults?: { title: string; snippet: string; url: string }[]; // For competitive layer: top 3 raw web results
+  vaultId?: string;
+  resourceId?: string;
+  matchedResources?: {
+    // For community layer: matched vault resources
     id: string;
     title: string;
     type: "pdf" | "video" | "note" | "link";
     fileUrl?: string;
     userId: string;
     vaultId: string;
-  }>;
-  communityAnswers?: Array<{ // All community answers for the query
+    views?: number; // View count as proxy for likes/popularity
+  }[];
+  communityAnswers?: {
+    // All community answers for the query
     answer: string;
     answerId: string;
     answerUserId: string;
     upvotes: number;
     qualityScore: number;
-  }>;
+  }[];
+
+  vaultContributions?: {
+    vaultId: string;
+    resourceId: string;
+    answer: string;
+    weight: number;
+    ownerId: string;
+  }[];
 }
 
 export interface SearchSuggestion {
@@ -91,11 +138,38 @@ export interface UpvoteAnswerResponse {
 }
 
 export const createSearchService = (axiosInstance: AxiosInstance) => ({
+  async createThread(): Promise<CreateThreadResponse> {
+    const response = await axiosInstance.post<ApiResponse<CreateThreadResponse>>(
+      "/threads/new",
+      {}
+    );
+    return response.data.data;
+  },
+
+  async getAllThreads(limit = 50, offset = 0): Promise<ThreadListItem[]> {
+    const response = await axiosInstance.get<{ success: boolean; data: ThreadListItem[] }>(
+      `/threads?limit=${limit}&offset=${offset}`
+    );
+    return response.data.data ?? [];
+  },
+
+  async getThreadById(threadId: string): Promise<ThreadWithMessages> {
+    const response = await axiosInstance.get<ApiResponse<ThreadWithMessages>>(
+      `/threads/${threadId}`
+    );
+    return response.data.data;
+  },
+
   async search(data: SearchRequest): Promise<SearchResult> {
     try {
+      // Map deep_search to deepSearch for backend compatibility
+      const body = {
+        ...data,
+        aiPreference: data.aiPreference === "deep_search" ? "deepSearch" : data.aiPreference,
+      };
       const response = await axiosInstance.post<ApiResponse<SearchResult>>(
         "/search",
-        data
+        body
       );
       return response.data.data;
     } catch (error: any) {

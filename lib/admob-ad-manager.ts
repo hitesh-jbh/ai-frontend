@@ -1,5 +1,5 @@
 /**
- * AdMob Ad Manager
+ * AdMob Ad Manager - COMMENTED OUT (Google Mobile Ads / react-native-google-mobile-ads disabled)
  *
  * This module provides an abstraction layer for AdMob ads.
  *
@@ -8,7 +8,7 @@
  * 2. Create a development build: npx expo prebuild && npx expo run:android (or run:ios)
  * 3. For production, replace test ad unit IDs with your production ad unit IDs
  */
-
+/*
 export interface AdConfig {
   adUnitId: string;
   isRewarded: boolean; // true for rewarded (skipable), false for interstitial (non-skipable)
@@ -33,17 +33,12 @@ class AdMobAdManager {
     },
   };
 
-  /**
-   * Initialize AdMob SDK
-   * Call this once when app starts
-   */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
       return;
     }
 
     try {
-      // Try to dynamically import - wrap in try-catch to prevent crashes
       try {
         const mobileAdsModule = await import("react-native-google-mobile-ads");
         const mobileAds = mobileAdsModule.default;
@@ -52,32 +47,25 @@ class AdMobAdManager {
           console.log("[AdMob] Initialized successfully");
         }
       } catch (importError) {
-        // Package not available or initialization failed - use mock mode
         console.warn("[AdMob] SDK not available, using mock mode");
       }
 
       this.isInitialized = true;
     } catch (error: any) {
-      // If package is not installed or initialization fails, fall back to mock mode
       console.warn(
         "[AdMob] Initialization failed, using mock mode:",
         error?.message
       );
-      this.isInitialized = true; // Still mark as initialized to allow mock mode
+      this.isInitialized = true;
     }
   }
 
-  /**
-   * Show a rewarded ad (skipable for paid users)
-   * Returns revenue estimate if ad was completed
-   */
   async showRewardedAd(config?: AdConfig): Promise<AdResult> {
     if (!this.isInitialized) {
       await this.initialize();
     }
 
     try {
-      // Try to use real AdMob SDK
       try {
         const mobileAdsModule = await import("react-native-google-mobile-ads");
         const RewardedAd = mobileAdsModule.RewardedAd;
@@ -113,7 +101,6 @@ class AdMobAdManager {
             }
           };
 
-          // Set timeout to detect if ad fails to load (30 seconds)
           timeoutId = setTimeout(() => {
             resolveOnce({ success: false, error: "Ad loading timeout" });
           }, 30000);
@@ -133,13 +120,11 @@ class AdMobAdManager {
           rewarded.addAdEventListener(
             RewardedAdEventType.EARNED_REWARD,
             (reward) => {
-              // Estimate revenue (adjust based on your actual ad performance)
-              const estimatedRevenue = 0.01 + Math.random() * 0.04; // ₹0.01 - ₹0.05
+              const estimatedRevenue = 0.01 + Math.random() * 0.04;
               resolveOnce({ success: true, revenue: estimatedRevenue });
             }
           );
 
-          // Load the ad (load() doesn't return a promise, it's fire-and-forget)
           try {
             rewarded.load();
           } catch (loadError: any) {
@@ -150,12 +135,11 @@ class AdMobAdManager {
           }
         });
       } catch (sdkError: any) {
-        // Fall back to mock if SDK is not available
         console.warn(
           "[AdMob] SDK not available, using mock:",
           sdkError?.message
         );
-        const mockRevenue = 0.01 + Math.random() * 0.04; // ₹0.01 - ₹0.05
+        const mockRevenue = 0.01 + Math.random() * 0.04;
         console.log("[AdMob] Rewarded ad shown (mock), revenue:", mockRevenue);
         return { success: true, revenue: mockRevenue };
       }
@@ -168,17 +152,12 @@ class AdMobAdManager {
     }
   }
 
-  /**
-   * Show an interstitial ad (non-skipable for free users)
-   * Returns revenue estimate if ad was shown
-   */
   async showInterstitialAd(config?: AdConfig): Promise<AdResult> {
     if (!this.isInitialized) {
       await this.initialize();
     }
 
     try {
-      // Try to use real AdMob SDK
       try {
         const mobileAdsModule = await import("react-native-google-mobile-ads");
         const InterstitialAd = mobileAdsModule.InterstitialAd;
@@ -214,7 +193,6 @@ class AdMobAdManager {
             }
           };
 
-          // Set timeout to detect if ad fails to load (30 seconds)
           timeoutId = setTimeout(() => {
             resolveOnce({ success: false, error: "Ad loading timeout" });
           }, 30000);
@@ -232,12 +210,10 @@ class AdMobAdManager {
           });
 
           interstitial.addAdEventListener(AdEventType.CLOSED, () => {
-            // Estimate revenue (adjust based on your actual ad performance)
-            const estimatedRevenue = 0.02 + Math.random() * 0.08; // ₹0.02 - ₹0.10
+            const estimatedRevenue = 0.02 + Math.random() * 0.08;
             resolveOnce({ success: true, revenue: estimatedRevenue });
           });
 
-          // Load the ad (load() doesn't return a promise, it's fire-and-forget)
           try {
             interstitial.load();
           } catch (loadError: any) {
@@ -248,12 +224,11 @@ class AdMobAdManager {
           }
         });
       } catch (sdkError: any) {
-        // Fall back to mock if SDK is not available
         console.warn(
           "[AdMob] SDK not available, using mock:",
           sdkError?.message
         );
-        const mockRevenue = 0.02 + Math.random() * 0.08; // ₹0.02 - ₹0.10
+        const mockRevenue = 0.02 + Math.random() * 0.08;
         console.log(
           "[AdMob] Interstitial ad shown (mock), revenue:",
           mockRevenue
@@ -271,3 +246,19 @@ class AdMobAdManager {
 }
 
 export const adMobAdManager = new AdMobAdManager();
+*/
+// Stub so imports don't break if re-enabled elsewhere
+export interface AdConfig {
+  adUnitId: string;
+  isRewarded: boolean;
+}
+export interface AdResult {
+  success: boolean;
+  revenue?: number;
+  error?: string;
+}
+export const adMobAdManager = {
+  initialize: async () => {},
+  showRewardedAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+  showInterstitialAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+};

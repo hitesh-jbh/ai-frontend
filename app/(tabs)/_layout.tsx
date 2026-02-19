@@ -72,9 +72,22 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "chatbubbles" : "chatbubbles-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="search"
         options={{
-          href: null, // Hide from tab bar
+          href: null, // Hide from tab bar (legacy Search screen kept)
         }}
       />
       <Tabs.Screen
@@ -126,6 +139,12 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
+        name="wallet"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
         name="community"
         options={{
           href: null, // Hide from tab bar
@@ -133,6 +152,12 @@ const TabsLayout = () => {
       />
       <Tabs.Screen
         name="manage-subscriptions"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="saved-followed-vaults"
         options={{
           href: null, // Hide from tab bar
         }}

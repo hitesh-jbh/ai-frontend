@@ -136,6 +136,11 @@ export default function Options() {
               onPress={() => {}}
             />
             <MenuItem
+              icon="wallet-outline"
+              label="Wallet"
+              onPress={() => router.push("/(tabs)/wallet")}
+            />
+            <MenuItem
               icon="gift-outline"
               label="Rewards"
               onPress={() => router.push("/(tabs)/rewards")}

@@ -40,72 +40,102 @@ const VaultCard: React.FC<VaultCardProps> = ({
   onEdit,
   onDelete,
   resourceCount = 0,
-}) => {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      className="bg-white rounded-lg mb-4 p-4 shadow-sm border border-gray-100"
-      activeOpacity={0.7}
-    >
-      <View className="flex-row items-start justify-between mb-3">
-        <View className="flex-1 mr-2">
-          <View className="flex-row items-center mb-1">
-            <Ionicons name="folder" size={20} color="#3B82F6" />
-            <Text
-              className="text-gray-900 text-lg font-outfit-bold flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {vault.title}
-            </Text>
-          </View>
-          {vault.description && (
-            <Text
-              className="text-gray-600 text-sm font-outfit-regular mt-1"
-              numberOfLines={2}
-            >
-              {vault.description}
-            </Text>
-          )}
-        </View>
-        <View className="flex-row items-center gap-2">
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            className="p-2"
-            activeOpacity={0.7}
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className="bg-white rounded-lg mb-4 p-4 shadow-sm border border-gray-100"
+    activeOpacity={0.7}
+  >
+    <View className="flex-row items-start justify-between mb-3">
+      <View className="flex-1 mr-2">
+        <View className="flex-row items-center mb-1">
+          <Ionicons name="folder" size={20} color="#3B82F6" />
+          <Text
+            className="text-gray-900 text-lg font-outfit-bold flex-1 ml-2"
+            numberOfLines={1}
           >
-            <Ionicons name="pencil-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-2"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-100">
-        <View className="flex-row items-center">
-          <Ionicons name="document-text-outline" size={16} color="#6B7280" />
-          <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
-            {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
+            {vault.title}
           </Text>
         </View>
-        <Text className="text-gray-500 text-xs font-outfit-regular">
-          {new Date(vault.createdAt).toLocaleDateString()}
+        {vault.description && (
+          <Text
+            className="text-gray-600 text-sm font-outfit-regular mt-1"
+            numberOfLines={2}
+          >
+            {vault.description}
+          </Text>
+        )}
+      </View>
+      <View className="flex-row items-center gap-2">
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          className="p-2"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="pencil-outline" size={20} color="#6B7280" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-2"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+    <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-100">
+      <View className="flex-row items-center">
+        <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+        <Text className="text-gray-600 text-xs font-outfit-regular ml-1">
+          {resourceCount} {resourceCount === 1 ? "resource" : "resources"}
         </Text>
       </View>
-    </TouchableOpacity>
-  );
-};
+      <Text className="text-gray-500 text-xs font-outfit-regular">
+        {new Date(vault.createdAt).toLocaleDateString()}
+      </Text>
+    </View>
+  </TouchableOpacity>
+);
+
+const VaultListRow: React.FC<{
+  vault: Vault;
+  onPress: () => void;
+}> = ({ vault, onPress }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className="bg-white rounded-lg mb-3 p-4 border border-gray-100 flex-row items-center"
+    activeOpacity={0.7}
+  >
+    <View className="flex-1 mr-3">
+      <Text
+        className="text-gray-900 text-base font-outfit-semi-bold"
+        numberOfLines={1}
+      >
+        {vault.title}
+      </Text>
+      {vault.description ? (
+        <Text
+          className="text-gray-600 text-sm font-outfit-regular mt-0.5"
+          numberOfLines={2}
+        >
+          {vault.description}
+        </Text>
+      ) : null}
+    </View>
+    <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+  </TouchableOpacity>
+);
+
+type VaultTabType = "my" | "saved" | "followed";
 
 export default function Vaults() {
+  const [activeTab, setActiveTab] = useState<VaultTabType>("my");
   const [profileImageError, setProfileImageError] = useState(false);
   const { user, setUser } = useAuthStore();
   const queryClient = useQueryClient();
@@ -149,7 +179,7 @@ export default function Vaults() {
     }
   }, [normalizedProfilePicture]);
 
-  // Infinite query for vaults
+  // Infinite query for my vaults (enabled when tab is "my")
   const {
     data: vaultsData,
     fetchNextPage,
@@ -170,11 +200,40 @@ export default function Vaults() {
     },
     getNextPageParam: (lastPage) => lastPage.nextOffset,
     initialPageParam: 0,
+    enabled: activeTab === "my",
   });
 
   const vaults = vaultsData?.pages.flatMap((page) => page.vaults) || [];
 
-  // Get resource counts for each vault (optimized - only fetch total count)
+  // Saved vaults (enabled when tab is "saved")
+  const {
+    data: savedData,
+    isLoading: isLoadingSaved,
+    refetch: refetchSaved,
+    isRefetching: isRefetchingSaved,
+  } = useQuery({
+    queryKey: ["savedVaults"],
+    queryFn: () => vault.getSavedVaults(50, 0),
+    enabled: activeTab === "saved",
+    staleTime: 30000,
+  });
+  const savedVaults = savedData?.vaults ?? [];
+
+  // Followed vaults (enabled when tab is "followed")
+  const {
+    data: followedData,
+    isLoading: isLoadingFollowed,
+    refetch: refetchFollowed,
+    isRefetching: isRefetchingFollowed,
+  } = useQuery({
+    queryKey: ["followedVaults"],
+    queryFn: () => vault.getFollowedVaults(50, 0),
+    enabled: activeTab === "followed",
+    staleTime: 30000,
+  });
+  const followedVaults = followedData?.vaults ?? [];
+
+  // Get resource counts for each vault (only when My Vaults tab is active)
   const { data: resourceCounts } = useQuery({
     queryKey: ["vaultResourceCounts", vaults.map((v) => v.id).join(",")],
     queryFn: async () => {
@@ -192,7 +251,7 @@ export default function Vaults() {
       );
       return counts;
     },
-    enabled: vaults?.length > 0,
+    enabled: activeTab === "my" && vaults?.length > 0,
   });
 
   const deleteVaultMutation = useMutation({
@@ -253,14 +312,131 @@ export default function Vaults() {
     />
   );
 
+  const isLoading = {
+    my: isLoadingVaults,
+    saved: isLoadingSaved,
+    followed: isLoadingFollowed,
+  }[activeTab];
+  const isRefetching = {
+    my: isRefetchingVaults,
+    saved: isRefetchingSaved,
+    followed: isRefetchingFollowed,
+  }[activeTab];
+  const refetch = {
+    my: refetchVaults,
+    saved: refetchSaved,
+    followed: refetchFollowed,
+  }[activeTab];
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader
         showBackButton
-        title="My Vaults"
+        title="Vaults"
         onBackPress={() => router.push("/(tabs)/leaderboard")}
       />
 
+      {/* Segmented Tab Control */}
+      <View className="flex-row mx-4 mt-2 mb-4 bg-gray-100 rounded-xl p-1">
+        <TouchableOpacity
+          onPress={() => setActiveTab("my")}
+          className={`flex-1 py-2.5 rounded-lg flex-row items-center justify-center ${
+            activeTab === "my" ? "bg-white" : ""
+          }`}
+          style={
+            activeTab === "my"
+              ? {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }
+              : undefined
+          }
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="folder"
+            size={18}
+            color={activeTab === "my" ? "#3B82F6" : "#6B7280"}
+          />
+          <Text
+            className={`ml-2 font-outfit-semi-bold ${
+              activeTab === "my" ? "text-blue-500" : "text-gray-500"
+            }`}
+            style={{ fontSize: 14 }}
+          >
+            My Vaults
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab("saved")}
+          className={`flex-1 py-2.5 rounded-lg flex-row items-center justify-center ${
+            activeTab === "saved" ? "bg-white" : ""
+          }`}
+          style={
+            activeTab === "saved"
+              ? {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }
+              : undefined
+          }
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="bookmark"
+            size={18}
+            color={activeTab === "saved" ? "#D97706" : "#6B7280"}
+          />
+          <Text
+            className={`ml-2 font-outfit-semi-bold ${
+              activeTab === "saved" ? "text-amber-600" : "text-gray-500"
+            }`}
+            style={{ fontSize: 14 }}
+          >
+            Saved
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab("followed")}
+          className={`flex-1 py-2.5 rounded-lg flex-row items-center justify-center ${
+            activeTab === "followed" ? "bg-white" : ""
+          }`}
+          style={
+            activeTab === "followed"
+              ? {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }
+              : undefined
+          }
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="heart"
+            size={18}
+            color={activeTab === "followed" ? "#6366F1" : "#6B7280"}
+          />
+          <Text
+            className={`ml-2 font-outfit-semi-bold ${
+              activeTab === "followed" ? "text-indigo-600" : "text-gray-500"
+            }`}
+            style={{ fontSize: 14 }}
+          >
+            Followed
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === "my" && (
       <View className="px-6">
         {/* Profile Section */}
         <View className="items-center mb-6">
@@ -343,50 +519,131 @@ export default function Vaults() {
           </Text>
         </TouchableOpacity>
       </View>
+      )}
 
-      {isLoadingVaults ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
-            Loading vaults...
-          </Text>
-        </View>
-      ) : vaults?.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="folder-outline" size={64} color="#9CA3AF" />
-          <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
-            No vaults yet
-          </Text>
-          <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-            Create your first vault to organize your resources
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={vaults}
-          renderItem={renderVault}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 24, paddingTop: 0 }}
-          onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) {
-              fetchNextPage();
+      {activeTab === "my" ? (
+        isLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
+              Loading vaults...
+            </Text>
+          </View>
+        ) : vaults?.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <Ionicons name="folder-outline" size={64} color="#9CA3AF" />
+            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4">
+              No vaults yet
+            </Text>
+            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+              Create your first vault to organize your resources
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={vaults}
+            renderItem={renderVault}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 24, paddingTop: 0 }}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() =>
+              isFetchingNextPage ? (
+                <View className="py-4 items-center">
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                </View>
+              ) : null
             }
-          }}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={() =>
-            isFetchingNextPage ? (
-              <View className="py-4 items-center">
-                <ActivityIndicator size="small" color="#3B82F6" />
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+              />
+            }
+          />
+        )
+      ) : activeTab === "saved" ? (
+        isLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
+              Loading...
+            </Text>
+          </View>
+        ) : savedVaults.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <Ionicons name="bookmark-outline" size={64} color="#9CA3AF" />
+            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4 text-center">
+              No saved vaults yet
+            </Text>
+            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+              Save vaults from Chat to find them here.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={savedVaults}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View className="px-4">
+                <VaultListRow
+                  vault={item}
+                  onPress={() => handleViewVault(item.id)}
+                />
               </View>
-            ) : null
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetchingVaults}
-              onRefresh={refetchVaults}
-            />
-          }
-        />
+            )}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+              />
+            }
+          />
+        )
+      ) : (
+        isLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text className="text-gray-500 text-sm font-outfit-regular mt-4">
+              Loading...
+            </Text>
+          </View>
+        ) : followedVaults.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <Ionicons name="heart-outline" size={64} color="#9CA3AF" />
+            <Text className="text-gray-900 text-lg font-outfit-semi-bold mt-4 text-center">
+              No followed vaults yet
+            </Text>
+            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
+              Follow vaults from Chat to see them here.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={followedVaults}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View className="px-4">
+                <VaultListRow
+                  vault={item}
+                  onPress={() => handleViewVault(item.id)}
+                />
+              </View>
+            )}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+              />
+            }
+          />
+        )
       )}
     </SafeAreaView>
   );

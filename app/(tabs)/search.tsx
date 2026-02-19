@@ -1,34 +1,31 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  ActivityIndicator,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, router } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect } from "@react-navigation/native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { SearchBar } from "../../components/ui/SearchBar";
-import { ScreenHeader } from "../../components/ui/ScreenHeader";
-import { useServices } from "../../hooks/useServices";
-import { useSubscriptionStore } from "../../store/subscription-store";
-import { useAuthStore } from "../../store/auth-store";
-import { useSearchPreferencesStore } from "../../store/search-preferences-store";
-import { SearchResult } from "../../services/search.service";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  showInfoToast,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { SearchBar } from "../../components/ui/SearchBar";
+import { useServices } from "../../hooks/useServices";
+import { SearchResult, ThreadListItem } from "../../services/search.service";
+import { useAuthStore } from "../../store/auth-store";
+import { useSubscriptionStore } from "../../store/subscription-store";
+import { scaleFont, scaleLineHeight } from "../../utils/font-scale";
+import {
   showErrorToast,
+  showInfoToast,
   showSuccessToast,
 } from "../../utils/toast";
-import { SearchLayerBottomSheet } from "../../components/search/SearchLayerBottomSheet";
-import { scaleFont, scaleLineHeight } from "../../utils/font-scale";
-import * as WebBrowser from "expo-web-browser";
 
 interface PendingAdTracking {
   query: string;
@@ -41,30 +38,23 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState(params.query || "");
   const [debouncedQuery, setDebouncedQuery] = useState(params.query || "");
   const [searchTrigger, setSearchTrigger] = useState<string | null>(
-    params.query || null
+    params.query || null,
   ); // Track when to trigger search
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [aiPreference] = useState<"short" | "medium" | "deep_search">("medium");
+  const [showThreadsModal, setShowThreadsModal] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [isShowingAd, setIsShowingAd] = useState(false);
   const [pendingAdTracking, setPendingAdTracking] =
     useState<PendingAdTracking | null>(null);
   const [isUpvoted, setIsUpvoted] = useState<boolean>(false);
   const searchInputRef = useRef<TextInput>(null);
-  const { search, subscription, searchAdRevenue } = useServices();
+  const services = useServices();
+  const { search, subscription, searchAdRevenue } = services;
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
-  const { preferredLayer, initialize: initializePreferences } =
-    useSearchPreferencesStore();
-
-  // Initialize preferences on mount and when user changes
-  useEffect(() => {
-    if (user?.id) {
-      initializePreferences(user.id);
-    }
-  }, [initializePreferences, user?.id]);
-
   // Fetch subscription status on mount
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
     queryKey: ["subscriptionStatus", user?.id],
@@ -91,7 +81,7 @@ export default function Search() {
     if (!currentStatus.hasSubscription || !subscription) {
       showInfoToast(
         "Subscription Required",
-        "You need an active subscription to search. Please choose a plan to continue."
+        "You need an active subscription to search. Please choose a plan to continue.",
       );
       setTimeout(() => {
         router.push("/(tabs)/manage-subscriptions" as any);
@@ -106,7 +96,7 @@ export default function Search() {
       if (expiresAt < now) {
         showErrorToast(
           "Subscription Expired",
-          "Your subscription has expired. Please renew or choose a new plan to continue searching."
+          "Your subscription has expired. Please renew or choose a new plan to continue searching.",
         );
         setTimeout(() => {
           router.push("/(tabs)/manage-subscriptions" as any);
@@ -153,7 +143,7 @@ export default function Search() {
         }, 300);
         return () => clearTimeout(timer);
       }
-    }, [currentStatus?.canSearch])
+    }, [currentStatus?.canSearch]),
   );
 
   // Update search query when params change - only once
@@ -198,52 +188,61 @@ export default function Search() {
     if (!currentStatus?.hasSubscription) {
       showInfoToast(
         "Subscription Required",
-        "You need an active subscription to search. Please choose a plan to continue."
+        "You need an active subscription to search. Please choose a plan to continue.",
       );
       return;
     }
 
-    // Determine ad type based on subscription plan
-    const isPaidUser = currentStatus.subscription?.plan !== "free";
-    const adType: "rewarded" | "interstitial" = isPaidUser
-      ? "rewarded"
-      : "interstitial";
-
-    // Show ad before performing search
-    setIsShowingAd(true);
-    try {
-      // Lazy load ad manager to avoid crashes on app startup
-      const { adMobAdManager } = await import("../../lib/admob-ad-manager");
-      const adResult = isPaidUser
-        ? await adMobAdManager.showRewardedAd()
-        : await adMobAdManager.showInterstitialAd();
-
-      setIsShowingAd(false);
-
-      if (adResult.success && adResult.revenue) {
-        // Store ad tracking info to track after search completes
-        setPendingAdTracking({
-          query: trimmedQuery,
-          adType,
-          revenue: adResult.revenue,
-        });
-
-        // Trigger search after ad completes
-        setSearchTrigger(trimmedQuery);
-      } else {
-        // Ad failed or was dismissed - still proceed with search but don't track revenue
-        setSearchTrigger(trimmedQuery);
-      }
-    } catch (error) {
-      console.error("Error showing ad:", error);
-      setIsShowingAd(false);
-      // Still proceed with search even if ad fails
-      setSearchTrigger(trimmedQuery);
-    }
+    // AdMob / Google Mobile Ads commented out - trigger search directly
+    // const isPaidUser = currentStatus.subscription?.plan !== "free";
+    // const adType: "rewarded" | "interstitial" = isPaidUser ? "rewarded" : "interstitial";
+    // setIsShowingAd(true);
+    // try {
+    //   const { adMobAdManager } = await import("../../lib/admob-ad-manager");
+    //   const adResult = isPaidUser
+    //     ? await adMobAdManager.showRewardedAd()
+    //     : await adMobAdManager.showInterstitialAd();
+    //   setIsShowingAd(false);
+    //   if (adResult.success && adResult.revenue) {
+    //     setPendingAdTracking({ query: trimmedQuery, adType, revenue: adResult.revenue });
+    //     setSearchTrigger(trimmedQuery);
+    //   } else {
+    //     setSearchTrigger(trimmedQuery);
+    //   }
+    // } catch (error) {
+    //   console.error("Error showing ad:", error);
+    //   setIsShowingAd(false);
+    //   setSearchTrigger(trimmedQuery);
+    // }
+    setSearchTrigger(trimmedQuery);
   };
 
   // Use searchTrigger for actual search, debouncedQuery for suggestions
   const activeQuery = searchTrigger || "";
+
+  // Create thread when user first searches (threadId is null)
+  useEffect(() => {
+    if (
+      activeQuery.length > 0 &&
+      !threadId &&
+      currentStatus?.hasSubscription === true
+    ) {
+      let cancelled = false;
+      search
+        .createThread()
+        .then((res) => {
+          if (!cancelled) {
+            setThreadId(res.threadId);
+          }
+        })
+        .catch((err) => {
+          console.error("Error creating thread:", err);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [activeQuery, threadId, currentStatus?.hasSubscription, search]);
 
   // Fetch search history (user-specific)
   const { data: searchHistory } = useQuery({
@@ -253,26 +252,31 @@ export default function Search() {
     staleTime: 60000, // Cache for 1 minute
   });
 
-  // Fetch search results - only trigger when searchTrigger is set (manual search)
+  // Fetch search results - only trigger when searchTrigger is set and threadId exists
   const {
     data: searchResult,
     isLoading,
     error,
     refetch,
   } = useQuery<SearchResult, Error>({
-    queryKey: ["search", activeQuery, preferredLayer],
+    queryKey: ["search", activeQuery, threadId],
     queryFn: async () => {
-      if (!activeQuery) {
-        throw new Error("Query is required");
+      if (!activeQuery || !threadId) {
+        throw new Error("Query and threadId are required");
       }
       return search.search({
         query: activeQuery,
-        preferredLayer: preferredLayer,
+        threadId: threadId,
+        aiPreference,
         limit: 20,
         offset: 0,
       });
     },
-    enabled: activeQuery.length > 0 && currentStatus?.hasSubscription === true,
+    enabled:
+      activeQuery.length > 0 &&
+      !!threadId &&
+      currentStatus?.hasSubscription === true &&
+      !!aiPreference,
     retry: 1,
     staleTime: 30000, // Cache results for 30 seconds to prevent duplicate calls
   });
@@ -288,7 +292,7 @@ export default function Search() {
 
   // Track ad revenue after search completes
   useEffect(() => {
-    if (searchResult && pendingAdTracking) {
+    if (searchResult && pendingAdTracking && searchAdRevenue) {
       // Track ad revenue with search result metadata
       searchAdRevenue
         .trackAdRevenue({
@@ -330,7 +334,7 @@ export default function Search() {
         showInfoToast(
           "Hold on!",
           errorAny?.response?.data?.message ||
-            "To continue, please choose a plan.."
+            "To continue, please choose a plan..",
         );
         // Navigate after a short delay
         setTimeout(() => {
@@ -341,7 +345,7 @@ export default function Search() {
         showErrorToast(
           "Daily Limit Reached",
           errorAny?.response?.data?.message ||
-            "You've reached your daily query limit. Please upgrade your plan or wait for the limit to reset."
+            "You've reached your daily query limit. Please upgrade your plan or wait for the limit to reset.",
         );
         // Refresh subscription status
         refetchSubscription();
@@ -363,13 +367,15 @@ export default function Search() {
     onSuccess: (data: any) => {
       setShowSubmitAnswer(false);
       setUserAnswer("");
-      queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
+      queryClient.invalidateQueries({
+        queryKey: ["search", activeQuery, threadId],
+      });
 
       // Show toast based on whether it was an update or new submission
       if (data?.isUpdate) {
         showSuccessToast(
           "Success",
-          "Your answer has been updated successfully!"
+          "Your answer has been updated successfully!",
         );
       } else {
         showSuccessToast("Thank you!", "Your answer has been submitted.");
@@ -383,7 +389,9 @@ export default function Search() {
     onSuccess: (data) => {
       // Update local state based on response (true = upvoted, false = removed)
       setIsUpvoted(data.upvoted);
-      queryClient.invalidateQueries({ queryKey: ["search", activeQuery] });
+      queryClient.invalidateQueries({
+        queryKey: ["search", activeQuery, threadId],
+      });
     },
     onError: (error: any) => {
       const errorMessage =
@@ -422,46 +430,34 @@ export default function Search() {
     if (!currentStatus?.hasSubscription) {
       showInfoToast(
         "Subscription Required",
-        "You need an active subscription to search. Please choose a plan to continue."
+        "You need an active subscription to search. Please choose a plan to continue.",
       );
       return;
     }
 
-    // Determine ad type based on subscription plan
-    const isPaidUser = currentStatus.subscription?.plan !== "free";
-    const adType: "rewarded" | "interstitial" = isPaidUser
-      ? "rewarded"
-      : "interstitial";
+    const isFreePlan = currentStatus.subscription?.plan === "free";
+    if (!isFreePlan) {
+      setSearchTrigger(trimmedQuery);
+      return;
+    }
 
-    // Show ad before performing search (same as handleSearch)
     setIsShowingAd(true);
     try {
-      // Lazy load ad manager to avoid crashes on app startup
       const { adMobAdManager } = await import("../../lib/admob-ad-manager");
-      const adResult = isPaidUser
-        ? await adMobAdManager.showRewardedAd()
-        : await adMobAdManager.showInterstitialAd();
-
+      const adType: "rewarded" | "interstitial" = "interstitial";
+      const adResult = await adMobAdManager.showInterstitialAd();
       setIsShowingAd(false);
-
-      if (adResult.success && adResult.revenue) {
-        // Store ad tracking info to track after search completes
+      if (adResult.success && adResult.revenue != null) {
         setPendingAdTracking({
           query: trimmedQuery,
           adType,
           revenue: adResult.revenue,
         });
-
-        // Trigger search after ad completes
-        setSearchTrigger(trimmedQuery);
-      } else {
-        // Ad failed or was dismissed - still proceed with search but don't track revenue
-        setSearchTrigger(trimmedQuery);
       }
+      setSearchTrigger(trimmedQuery);
     } catch (error) {
       console.error("Error showing ad:", error);
       setIsShowingAd(false);
-      // Still proceed with search even if ad fails
       setSearchTrigger(trimmedQuery);
     }
   };
@@ -488,9 +484,29 @@ export default function Search() {
     return labels[source] || source;
   };
 
+  // Fetch threads when modal is open
+  const { data: threads = [] } = useQuery<ThreadListItem[]>({
+    queryKey: ["threads"],
+    queryFn: () => search.getAllThreads(50, 0),
+    enabled: showThreadsModal && !!user?.id,
+    staleTime: 10000,
+  });
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      <ScreenHeader title="Search" showBackButton />
+      <ScreenHeader
+        title="Search"
+        showBackButton
+        rightElement={
+          <TouchableOpacity
+            onPress={() => setShowThreadsModal(true)}
+            className="w-10 h-10 rounded-full items-center justify-center"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
       <View className="px-6 pb-4 border-b border-gray-200">
         <View className="flex-row items-center gap-3 mt-2">
           <View className="flex-1">
@@ -504,18 +520,13 @@ export default function Search() {
               showSuggestions={false}
             />
           </View>
-          <TouchableOpacity
-            onPress={() => setShowPreferences(true)}
-            className="bg-gray-100 rounded-full p-3"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="options-outline" size={24} color="#3B82F6" />
-          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-        {(isLoading || isShowingAd) && (
+        {(isLoading ||
+          isShowingAd ||
+          (activeQuery && !threadId && currentStatus?.hasSubscription)) && (
           <View className="items-center justify-center py-20">
             <ActivityIndicator size="large" color="#3B82F6" />
             <Text
@@ -525,7 +536,11 @@ export default function Search() {
                 lineHeight: scaleLineHeight(scaleFont(12), 1.4),
               }}
             >
-              {isShowingAd ? "Loading..." : "Searching..."}
+              {isShowingAd
+                ? "Loading..."
+                : !threadId
+                  ? "Preparing..."
+                  : "Searching..."}
             </Text>
           </View>
         )}
@@ -554,13 +569,13 @@ export default function Search() {
           </View>
         )}
 
-        {searchResult && !isLoading && !isShowingAd && (
+        {searchResult && !isLoading && !isShowingAd && threadId && (
           <View className="mt-4">
             {/* Source Badge */}
             <View className="flex-row items-center justify-between mb-3">
               <View
                 className={`rounded-full px-3 py-1.5 ${getSourceBadgeColor(
-                  searchResult.source
+                  searchResult.source,
                 )}`}
               >
                 <Text
@@ -606,252 +621,207 @@ export default function Search() {
             </View>
 
             {/* All Community Answers (if multiple exist) */}
-            {searchResult.communityAnswers && 
-             searchResult.communityAnswers.length > 1 && (
-              <View className="mb-4">
-                <Text
-                  className="text-gray-900 font-outfit-semi-bold mb-3"
-                  style={{
-                    fontSize: scaleFont(16),
-                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                  }}
-                >
-                  Other Community Answers ({searchResult.communityAnswers.length - 1})
-                </Text>
-                {searchResult.communityAnswers.slice(1).map((communityAnswer, index) => (
-                  <View
-                    key={communityAnswer.answerId}
-                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                  >
-                    <Text
-                      className="text-gray-900 font-outfit-regular mb-3"
-                      style={{
-                        fontSize: scaleFont(16),
-                        lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                      }}
-                    >
-                      {communityAnswer.answer}
-                    </Text>
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center">
-                        {communityAnswer.upvotes > 0 && (
-                          <View className="flex-row items-center mr-3">
-                            <Ionicons name="thumbs-up" size={16} color="#6B7280" />
-                            <Text
-                              className="text-gray-700 font-outfit-regular ml-1"
-                              style={{
-                                fontSize: scaleFont(12),
-                                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
-                              }}
-                            >
-                              {communityAnswer.upvotes} upvotes
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      {communityAnswer.answerUserId !== user?.id && (
-                        <TouchableOpacity
-                          className="bg-purple-500 rounded-lg px-4 py-2"
-                          onPress={() => {
-                            upvoteMutation.mutate(communityAnswer.answerId);
-                          }}
-                          disabled={upvoteMutation.isPending}
-                          activeOpacity={0.8}
-                        >
-                          <View className="flex-row items-center">
-                            <Ionicons name="thumbs-up" size={16} color="#FFFFFF" />
-                            <Text
-                              className="text-white font-outfit-semi-bold ml-1"
-                              style={{
-                                fontSize: scaleFont(12),
-                                lineHeight: scaleLineHeight(scaleFont(12), 1.4),
-                              }}
-                            >
-                              Upvote
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Remove duplicate web results section - already shown above */}
-            {false && searchResult.source !== "competitive" && searchResult.webResults && searchResult.webResults.length > 0 && (
-              <View className="mb-4">
-                <Text
-                  className="text-gray-900 font-outfit-semi-bold mb-3"
-                  style={{
-                    fontSize: scaleFont(16),
-                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                  }}
-                >
-                  Top Results
-                </Text>
-                {searchResult.webResults.map((result, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                    onPress={async () => {
-                      // Open in-app browser (expanded result - full screen)
-                      try {
-                        await WebBrowser.openBrowserAsync(result.url, {
-                          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-                          enableBarCollapsing: false,
-                          controlsColor: "#3B82F6",
-                          toolbarColor: "#FFFFFF",
-                        });
-                      } catch (error) {
-                        console.error("Error opening browser:", error);
-                        showErrorToast("Failed to open link. Please try again.");
-                      }
+            {searchResult.communityAnswers &&
+              searchResult.communityAnswers.length > 1 && (
+                <View className="mb-4">
+                  <Text
+                    className="text-gray-900 font-outfit-semi-bold mb-3"
+                    style={{
+                      fontSize: scaleFont(16),
+                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
                     }}
-                    activeOpacity={0.7}
                   >
-                    <Text
-                      className="text-blue-600 font-outfit-semi-bold mb-1"
-                      style={{
-                        fontSize: scaleFont(14),
-                        lineHeight: scaleLineHeight(scaleFont(14), 1.4),
-                      }}
-                      numberOfLines={2}
-                    >
-                      {result.title}
-                    </Text>
-                    <Text
-                      className="text-gray-600 font-outfit-regular mb-2"
-                      style={{
-                        fontSize: scaleFont(12),
-                        lineHeight: scaleLineHeight(scaleFont(12), 1.4),
-                      }}
-                      numberOfLines={2}
-                    >
-                      {result.snippet}
-                    </Text>
-                    <Text
-                      className="text-gray-400 font-outfit-regular text-xs"
-                      style={{
-                        fontSize: scaleFont(10),
-                        lineHeight: scaleLineHeight(scaleFont(10), 1.5),
-                      }}
-                      numberOfLines={1}
-                    >
-                      {result.url}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {/* Matched Resources (Community Layer) */}
-            {searchResult.matchedResources && searchResult.matchedResources.length > 0 && (
-              <View className="mb-4">
-                <Text
-                  className="text-gray-900 font-outfit-semi-bold mb-3"
-                  style={{
-                    fontSize: scaleFont(16),
-                    lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                  }}
-                >
-                  Related Resources
-                </Text>
-                {searchResult.matchedResources.map((resource) => (
-                  <TouchableOpacity
-                    key={resource.id}
-                    className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                    onPress={async () => {
-                      // Navigate to resource view - this will track the view automatically
-                      router.push(`/(tabs)/view-resource?id=${resource.id}`);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View className="flex-row items-start">
+                    Other Community Answers (
+                    {searchResult.communityAnswers.length - 1})
+                  </Text>
+                  {searchResult.communityAnswers
+                    .slice(1)
+                    .map((communityAnswer, index) => (
                       <View
-                        className="rounded-lg p-2 mr-3"
-                        style={{
-                          backgroundColor:
-                            resource.type === "video"
-                              ? "#3B82F620"
-                              : resource.type === "pdf"
-                              ? "#EF444420"
-                              : resource.type === "note"
-                              ? "#10B98120"
-                              : "#F59E0B20",
-                        }}
+                        key={communityAnswer.answerId}
+                        className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
                       >
-                        <Ionicons
-                          name={
-                            resource.type === "video"
-                              ? "videocam"
-                              : resource.type === "pdf"
-                              ? "document-text"
-                              : resource.type === "note"
-                              ? "document"
-                              : "link"
-                          }
-                          size={24}
-                          color={
-                            resource.type === "video"
-                              ? "#3B82F6"
-                              : resource.type === "pdf"
-                              ? "#EF4444"
-                              : resource.type === "note"
-                              ? "#10B981"
-                              : "#F59E0B"
-                          }
-                        />
-                      </View>
-                      <View className="flex-1">
                         <Text
-                          className="text-gray-900 font-outfit-semi-bold mb-1"
+                          className="text-gray-900 font-outfit-regular mb-3"
                           style={{
-                            fontSize: scaleFont(14),
-                            lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                            fontSize: scaleFont(16),
+                            lineHeight: scaleLineHeight(scaleFont(16), 1.3),
                           }}
-                          numberOfLines={2}
                         >
-                          {resource.title}
+                          {communityAnswer.answer}
                         </Text>
-                        <View className="flex-row items-center mt-1">
-                          <View
-                            className="rounded px-2 py-0.5 mr-2"
-                            style={{
-                              backgroundColor:
-                                resource.type === "video"
-                                  ? "#3B82F610"
-                                  : resource.type === "pdf"
-                                  ? "#EF444410"
-                                  : resource.type === "note"
-                                  ? "#10B98110"
-                                  : "#F59E0B10",
-                            }}
-                          >
-                            <Text
-                              className="text-xs font-outfit-semi-bold uppercase"
-                              style={{
-                                color:
-                                  resource.type === "video"
-                                    ? "#3B82F6"
-                                    : resource.type === "pdf"
-                                    ? "#EF4444"
-                                    : resource.type === "note"
-                                    ? "#10B981"
-                                    : "#F59E0B",
-                              }}
-                            >
-                              {resource.type}
-                            </Text>
+                        <View className="flex-row items-center justify-between">
+                          <View className="flex-row items-center">
+                            {communityAnswer.upvotes > 0 && (
+                              <View className="flex-row items-center mr-3">
+                                <Ionicons
+                                  name="thumbs-up"
+                                  size={16}
+                                  color="#6B7280"
+                                />
+                                <Text
+                                  className="text-gray-700 font-outfit-regular ml-1"
+                                  style={{
+                                    fontSize: scaleFont(12),
+                                    lineHeight: scaleLineHeight(
+                                      scaleFont(12),
+                                      1.4,
+                                    ),
+                                  }}
+                                >
+                                  {communityAnswer.upvotes} upvotes
+                                </Text>
+                              </View>
+                            )}
                           </View>
-                          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                          {communityAnswer.answerUserId !== user?.id && (
+                            <TouchableOpacity
+                              className="bg-purple-500 rounded-lg px-4 py-2"
+                              onPress={() => {
+                                upvoteMutation.mutate(communityAnswer.answerId);
+                              }}
+                              disabled={upvoteMutation.isPending}
+                              activeOpacity={0.8}
+                            >
+                              <View className="flex-row items-center">
+                                <Ionicons
+                                  name="thumbs-up"
+                                  size={16}
+                                  color="#FFFFFF"
+                                />
+                                <Text
+                                  className="text-white font-outfit-semi-bold ml-1"
+                                  style={{
+                                    fontSize: scaleFont(12),
+                                    lineHeight: scaleLineHeight(
+                                      scaleFont(12),
+                                      1.4,
+                                    ),
+                                  }}
+                                >
+                                  Upvote
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+                    ))}
+                </View>
+              )}
+
+            {/* Matched Resources (Community Layer) */}
+            {searchResult.matchedResources &&
+              searchResult.matchedResources.length > 0 && (
+                <View className="mb-4">
+                  <Text
+                    className="text-gray-900 font-outfit-semi-bold mb-3"
+                    style={{
+                      fontSize: scaleFont(16),
+                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                    }}
+                  >
+                    Related Resources
+                  </Text>
+                  {searchResult.matchedResources.map((resource) => (
+                    <TouchableOpacity
+                      key={resource.id}
+                      className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
+                      onPress={async () => {
+                        // Navigate to resource view - this will track the view automatically
+                        router.push(`/(tabs)/view-resource?id=${resource.id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View className="flex-row items-start">
+                        <View
+                          className="rounded-lg p-2 mr-3"
+                          style={{
+                            backgroundColor:
+                              resource.type === "video"
+                                ? "#3B82F620"
+                                : resource.type === "pdf"
+                                  ? "#EF444420"
+                                  : resource.type === "note"
+                                    ? "#10B98120"
+                                    : "#F59E0B20",
+                          }}
+                        >
+                          <Ionicons
+                            name={
+                              resource.type === "video"
+                                ? "videocam"
+                                : resource.type === "pdf"
+                                  ? "document-text"
+                                  : resource.type === "note"
+                                    ? "document"
+                                    : "link"
+                            }
+                            size={24}
+                            color={
+                              resource.type === "video"
+                                ? "#3B82F6"
+                                : resource.type === "pdf"
+                                  ? "#EF4444"
+                                  : resource.type === "note"
+                                    ? "#10B981"
+                                    : "#F59E0B"
+                            }
+                          />
+                        </View>
+                        <View className="flex-1">
+                          <Text
+                            className="text-gray-900 font-outfit-semi-bold mb-1"
+                            style={{
+                              fontSize: scaleFont(14),
+                              lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                            }}
+                            numberOfLines={2}
+                          >
+                            {resource.title}
+                          </Text>
+                          <View className="flex-row items-center mt-1">
+                            <View
+                              className="rounded px-2 py-0.5 mr-2"
+                              style={{
+                                backgroundColor:
+                                  resource.type === "video"
+                                    ? "#3B82F610"
+                                    : resource.type === "pdf"
+                                      ? "#EF444410"
+                                      : resource.type === "note"
+                                        ? "#10B98110"
+                                        : "#F59E0B10",
+                              }}
+                            >
+                              <Text
+                                className="text-xs font-outfit-semi-bold uppercase"
+                                style={{
+                                  color:
+                                    resource.type === "video"
+                                      ? "#3B82F6"
+                                      : resource.type === "pdf"
+                                        ? "#EF4444"
+                                        : resource.type === "note"
+                                          ? "#10B981"
+                                          : "#F59E0B",
+                                }}
+                              >
+                                {resource.type}
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name="chevron-forward"
+                              size={16}
+                              color="#9CA3AF"
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
             {/* Metadata - Cleaner */}
             <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100">
@@ -898,9 +868,11 @@ export default function Search() {
               {(() => {
                 const isCommunity = searchResult.source === "community";
                 const hasAnswerId = !!searchResult.answerId;
-                const isNotOwner = !searchResult.answerUserId || searchResult.answerUserId !== user?.id;
+                const isNotOwner =
+                  !searchResult.answerUserId ||
+                  searchResult.answerUserId !== user?.id;
                 const shouldShow = isCommunity && hasAnswerId && isNotOwner;
-                
+
                 // Debug logging
                 if (isCommunity) {
                   console.log("[Upvote Button Debug]", {
@@ -915,7 +887,7 @@ export default function Search() {
                     fullSearchResult: JSON.stringify(searchResult, null, 2),
                   });
                 }
-                
+
                 return shouldShow;
               })() && (
                 <TouchableOpacity
@@ -929,10 +901,10 @@ export default function Search() {
                   activeOpacity={0.8}
                 >
                   <View className="flex-row items-center">
-                    <Ionicons 
-                      name={isUpvoted ? "checkmark-circle" : "thumbs-up"} 
-                      size={20} 
-                      color="#FFFFFF" 
+                    <Ionicons
+                      name={isUpvoted ? "checkmark-circle" : "thumbs-up"}
+                      size={20}
+                      color="#FFFFFF"
                     />
                     <Text
                       className="text-white font-outfit-semi-bold ml-2"
@@ -941,11 +913,11 @@ export default function Search() {
                         lineHeight: scaleLineHeight(scaleFont(14), 1.4),
                       }}
                     >
-                      {upvoteMutation.isPending 
-                        ? "..." 
-                        : isUpvoted 
-                        ? "Upvoted" 
-                        : "Upvote"}
+                      {upvoteMutation.isPending
+                        ? "..."
+                        : isUpvoted
+                          ? "Upvoted"
+                          : "Upvote"}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1053,7 +1025,7 @@ export default function Search() {
                                   fontSize: scaleFont(10),
                                   lineHeight: scaleLineHeight(
                                     scaleFont(10),
-                                    1.5
+                                    1.5,
                                   ),
                                 }}
                               >
@@ -1096,6 +1068,102 @@ export default function Search() {
             </View>
           )}
       </ScrollView>
+
+      {/* Threads Modal */}
+      <Modal
+        visible={showThreadsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowThreadsModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-end"
+          activeOpacity={1}
+          onPress={() => setShowThreadsModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            className="bg-white rounded-t-3xl max-h-[70%]"
+          >
+            <View className="p-6 border-b border-gray-200">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-gray-900 text-xl font-outfit-bold">
+                  Your Threads
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowThreadsModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <ScrollView
+              className="max-h-96"
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {threads.length === 0 ? (
+                <View className="p-8 items-center">
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={48}
+                    color="#9CA3AF"
+                  />
+                  <Text
+                    className="text-gray-500 font-outfit-regular mt-4 text-center"
+                    style={{
+                      fontSize: scaleFont(14),
+                      lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                    }}
+                  >
+                    No threads yet. Start a search to create one.
+                  </Text>
+                </View>
+              ) : (
+                <View className="p-4">
+                  {threads.map((thread) => (
+                    <TouchableOpacity
+                      key={thread.id}
+                      className={`rounded-xl p-4 mb-2 ${
+                        threadId === thread.id
+                          ? "bg-blue-50 border border-blue-200"
+                          : "bg-gray-50"
+                      }`}
+                      onPress={() => {
+                        setThreadId(thread.id);
+                        setShowThreadsModal(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        className="text-gray-900 font-outfit-semi-bold"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                        numberOfLines={2}
+                      >
+                        {thread.title || "New conversation"}
+                      </Text>
+                      <Text
+                        className="text-gray-500 font-outfit-regular mt-1"
+                        style={{
+                          fontSize: scaleFont(11),
+                          lineHeight: scaleLineHeight(scaleFont(11), 1.4),
+                        }}
+                      >
+                        {new Date(thread.createdAt).toLocaleDateString()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Submit Answer Modal */}
       <Modal
@@ -1179,7 +1247,7 @@ export default function Search() {
                       } else {
                         showErrorToast(
                           "Validation Error",
-                          "Answer must be at least 10 characters long"
+                          "Answer must be at least 10 characters long",
                         );
                       }
                     }}
@@ -1206,12 +1274,6 @@ export default function Search() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-
-      {/* Search Preferences Bottom Sheet */}
-      <SearchLayerBottomSheet
-        visible={showPreferences}
-        onClose={() => setShowPreferences(false)}
-      />
     </SafeAreaView>
   );
 }

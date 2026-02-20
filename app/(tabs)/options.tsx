@@ -129,11 +129,15 @@ export default function Options() {
               label="Manage Subscriptions"
               onPress={() => router.push("/(tabs)/manage-subscriptions")}
             />
-            <MenuItem icon="mail-outline" label="Contact" onPress={() => {}} />
+            <MenuItem
+              icon="mail-outline"
+              label="Contact"
+              onPress={() => router.push("/(tabs)/contacts")}
+            />
             <MenuItem
               icon="help-circle-outline"
               label="Help & Support"
-              onPress={() => {}}
+              onPress={() => router.push("/(tabs)/help-support")}
             />
             <MenuItem
               icon="wallet-outline"

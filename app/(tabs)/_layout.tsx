@@ -175,6 +175,18 @@ const TabsLayout = () => {
           ),
         }}
       />
+      <Tabs.Screen
+        name="contacts"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="help-support"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 };

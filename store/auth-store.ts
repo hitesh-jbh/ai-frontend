@@ -6,7 +6,8 @@ import { useSearchPreferencesStore } from "./search-preferences-store";
 
 interface User {
   id: string;
-  email: string;
+  email?: string;
+  phone?: string;
   name: string;
   role: string;
   points: number;

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,12 @@ import {
   ActivityIndicator,
   FlatList,
   StyleSheet,
+  Modal,
+  TextInput,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -19,10 +25,13 @@ import { useServices } from "../../hooks/useServices";
 import { useSubscriptionStore } from "../../store/subscription-store";
 import { useAuthStore } from "../../store/auth-store";
 import { SubscriptionPlan } from "../../services/subscription.service";
+import { Button } from "../../components/ui/Button";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { showSuccessToast, showErrorToast } from "../../utils/toast";
 import RazorpayCheckout from "react-native-razorpay";
+
+const PLAN_TYPES = ["free", "smart", "pro", "creator"] as const;
 
 interface PlanCardProps {
   plan: SubscriptionPlan;
@@ -30,6 +39,9 @@ interface PlanCardProps {
   canBuy: boolean;
   onBuy: () => void;
   onSelectFree: () => void;
+  isAdmin?: boolean;
+  onEdit?: (plan: SubscriptionPlan) => void;
+  onDelete?: (plan: SubscriptionPlan) => void;
 }
 
 const PlanCard: React.FC<PlanCardProps> = ({
@@ -38,6 +50,9 @@ const PlanCard: React.FC<PlanCardProps> = ({
   canBuy,
   onBuy,
   onSelectFree,
+  isAdmin,
+  onEdit,
+  onDelete,
 }) => {
   const getPlanColor = (planType: string) => {
     switch (planType) {
@@ -145,7 +160,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
       >
         {/* Header */}
         <View className="flex-row items-center justify-between mb-4">
-          <View>
+          <View className="flex-1">
             <Text
               className={`text-2xl font-outfit-bold ${colors.text} uppercase`}
             >
@@ -159,13 +174,33 @@ const PlanCard: React.FC<PlanCardProps> = ({
               </Text>
             )}
           </View>
-          {isCurrentPlan && (
-            <View className="bg-green-500 px-3 py-1 rounded-full">
-              <Text className="text-white text-xs font-outfit-semi-bold">
-                Current
-              </Text>
-            </View>
-          )}
+          <View className="flex-row items-center gap-2">
+            {isCurrentPlan && (
+              <View className="bg-green-500 px-3 py-1 rounded-full">
+                <Text className="text-white text-xs font-outfit-semi-bold">
+                  Current
+                </Text>
+              </View>
+            )}
+            {isAdmin && (
+              <>
+                <TouchableOpacity
+                  onPress={() => onEdit?.(plan)}
+                  className="w-9 h-9 rounded-full bg-white/80 items-center justify-center"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil" size={18} color={iconColor} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => onDelete?.(plan)}
+                  className="w-9 h-9 rounded-full bg-red-100 items-center justify-center"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
 
         {/* Price */}
@@ -250,6 +285,18 @@ export default function ManageSubscriptions() {
   const { setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  const isAdmin = user?.role === "admin";
+
+  // Plan form modal state (create / edit)
+  const [planModalVisible, setPlanModalVisible] = useState(false);
+  const [planModalMode, setPlanModalMode] = useState<"create" | "edit">("create");
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [formPlanType, setFormPlanType] = useState<"free" | "smart" | "pro" | "creator">("free");
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formDailyQueries, setFormDailyQueries] = useState("");
+  const [formDailyTokens, setFormDailyTokens] = useState("");
+  const [formPrice, setFormPrice] = useState("");
 
   // Fetch current subscription status
   const { data: currentStatus, isLoading: isLoadingStatus } = useQuery({
@@ -354,6 +401,167 @@ export default function ManageSubscriptions() {
       );
     },
   });
+
+  // Create plan mutation (admin)
+  const createPlanMutation = useMutation({
+    mutationFn: (data: {
+      planType: "free" | "smart" | "pro" | "creator";
+      name: string;
+      description?: string;
+      dailyQueriesLimit: number;
+      dailyTokensLimit: number;
+      price: string;
+      currency?: string;
+    }) => subscription.createPlan(data),
+    onSuccess: () => {
+      showSuccessToast("Success", "Plan created successfully");
+      queryClient.invalidateQueries({ queryKey: ["subscriptionPlans"] });
+      setPlanModalVisible(false);
+      resetPlanForm();
+    },
+    onError: (error: any) => {
+      showErrorToast(
+        "Error",
+        error?.response?.data?.message || "Failed to create plan"
+      );
+    },
+  });
+
+  // Update plan mutation (admin)
+  const updatePlanMutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        name?: string;
+        description?: string;
+        dailyQueriesLimit?: number;
+        dailyTokensLimit?: number;
+        price?: string;
+      };
+    }) => subscription.updatePlan(id, data),
+    onSuccess: () => {
+      showSuccessToast("Success", "Plan updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["subscriptionPlans"] });
+      setPlanModalVisible(false);
+      setEditingPlan(null);
+      resetPlanForm();
+    },
+    onError: (error: any) => {
+      showErrorToast(
+        "Error",
+        error?.response?.data?.message || "Failed to update plan"
+      );
+    },
+  });
+
+  // Delete plan mutation (admin)
+  const deletePlanMutation = useMutation({
+    mutationFn: (id: string) => subscription.deletePlan(id),
+    onSuccess: () => {
+      showSuccessToast("Success", "Plan deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["subscriptionPlans"] });
+    },
+    onError: (error: any) => {
+      showErrorToast(
+        "Error",
+        error?.response?.data?.message || "Failed to delete plan"
+      );
+    },
+  });
+
+  const resetPlanForm = () => {
+    setFormPlanType("free");
+    setFormName("");
+    setFormDescription("");
+    setFormDailyQueries("");
+    setFormDailyTokens("");
+    setFormPrice("");
+  };
+
+  const openCreatePlan = () => {
+    setPlanModalMode("create");
+    setEditingPlan(null);
+    resetPlanForm();
+    setPlanModalVisible(true);
+  };
+
+  const openEditPlan = (plan: SubscriptionPlan) => {
+    setPlanModalMode("edit");
+    setEditingPlan(plan);
+    setFormPlanType(plan.planType);
+    setFormName(plan.name);
+    setFormDescription(plan.description || "");
+    setFormDailyQueries(String(plan.dailyQueriesLimit));
+    setFormDailyTokens(String(plan.dailyTokensLimit));
+    setFormPrice(plan.price);
+    setPlanModalVisible(true);
+  };
+
+  const handleDeletePlan = (plan: SubscriptionPlan) => {
+    Alert.alert(
+      "Delete Plan",
+      `Are you sure you want to delete "${plan.name}"? This will soft-delete the plan.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deletePlanMutation.mutate(plan.id),
+        },
+      ]
+    );
+  };
+
+  const handlePlanFormSubmit = () => {
+    const dailyQueries = parseInt(formDailyQueries, 10);
+    const dailyTokens = parseInt(formDailyTokens, 10);
+    const priceVal = formPrice.trim();
+    // Backend expects price as "0.00" format (two decimals)
+    const numPrice = parseFloat(priceVal) || 0;
+    const priceFormatted = numPrice.toFixed(2);
+
+    if (!formName.trim()) {
+      showErrorToast("Error", "Name is required");
+      return;
+    }
+    if (isNaN(dailyQueries) || dailyQueries < 1) {
+      showErrorToast("Error", "Daily queries must be a positive number");
+      return;
+    }
+    if (isNaN(dailyTokens) || dailyTokens < 1) {
+      showErrorToast("Error", "Daily tokens must be a positive number");
+      return;
+    }
+    if (planModalMode === "create") {
+      if (!priceFormatted || parseFloat(priceFormatted) < 0) {
+        showErrorToast("Error", "Price is required (use 0.00 for free)");
+        return;
+      }
+      createPlanMutation.mutate({
+        planType: formPlanType,
+        name: formName.trim(),
+        description: formDescription.trim() || undefined,
+        dailyQueriesLimit: dailyQueries,
+        dailyTokensLimit: dailyTokens,
+        price: priceFormatted,
+        currency: "INR",
+      });
+    } else if (editingPlan) {
+      updatePlanMutation.mutate({
+        id: editingPlan.id,
+        data: {
+          name: formName.trim(),
+          description: formDescription.trim() || undefined,
+          dailyQueriesLimit: dailyQueries,
+          dailyTokensLimit: dailyTokens,
+          price: priceFormatted || undefined,
+        },
+      });
+    }
+  };
 
   // Check if user can buy a new plan
   const canBuyNewPlan = (planType: string) => {
@@ -472,6 +680,20 @@ export default function ManageSubscriptions() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader title="Manage Subscriptions" showBackButton />
+      {isAdmin && (
+        <View className="px-6 pt-2 pb-2">
+          <TouchableOpacity
+            onPress={openCreatePlan}
+            className="bg-blue-600 rounded-xl py-3 px-4 flex-row items-center justify-center"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={22} color="#FFF" />
+            <Text className="text-white font-outfit-semi-bold text-base ml-2">
+              Create Plan
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View className="flex-1">
         {/* Current Plan Status - Fixed Header */}
@@ -570,6 +792,9 @@ export default function ManageSubscriptions() {
                   canBuy={canBuyNewPlan(plan.planType)}
                   onBuy={() => handleBuyPlan(plan)}
                   onSelectFree={handleSelectFree}
+                  isAdmin={isAdmin}
+                  onEdit={openEditPlan}
+                  onDelete={handleDeletePlan}
                 />
               </View>
             )}
@@ -607,6 +832,151 @@ export default function ManageSubscriptions() {
             }
           />
         )}
+
+        {/* Plan form modal (admin: create / edit) */}
+        <Modal
+          visible={planModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setPlanModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.modalContentWrap}
+            >
+              <View style={styles.modalContent}>
+                <View className="flex-row items-center justify-between mb-4">
+                  <Text className="text-xl font-outfit-bold text-gray-900">
+                    {planModalMode === "create" ? "Create Plan" : "Edit Plan"}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPlanModalVisible(false);
+                      setEditingPlan(null);
+                      resetPlanForm();
+                    }}
+                    className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
+                  >
+                    <Ionicons name="close" size={22} color="#374151" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingBottom: 24 }}
+                >
+                  {planModalMode === "create" ? (
+                    <View className="mb-4">
+                      <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                        Plan Type
+                      </Text>
+                      <View className="flex-row flex-wrap gap-2">
+                        {PLAN_TYPES.map((type) => (
+                          <TouchableOpacity
+                            key={type}
+                            onPress={() => setFormPlanType(type)}
+                            className={`px-4 py-2 rounded-lg ${
+                              formPlanType === type ? "bg-blue-600" : "bg-gray-100"
+                            }`}
+                          >
+                            <Text
+                              className={`font-outfit-medium ${
+                                formPlanType === type ? "text-white" : "text-gray-700"
+                              }`}
+                            >
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View className="mb-4">
+                      <Text className="text-gray-500 text-sm font-outfit-regular">
+                        Plan type: {editingPlan?.planType}
+                      </Text>
+                    </View>
+                  )}
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                      Name
+                    </Text>
+                    <TextInput
+                      value={formName}
+                      onChangeText={setFormName}
+                      placeholder="Plan name"
+                      placeholderTextColor="#9CA3AF"
+                      className="bg-gray-100 rounded-xl px-4 py-3 text-gray-900 font-outfit-regular"
+                    />
+                  </View>
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                      Description (optional)
+                    </Text>
+                    <TextInput
+                      value={formDescription}
+                      onChangeText={setFormDescription}
+                      placeholder="Short description"
+                      placeholderTextColor="#9CA3AF"
+                      className="bg-gray-100 rounded-xl px-4 py-3 text-gray-900 font-outfit-regular"
+                    />
+                  </View>
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                      Daily queries limit
+                    </Text>
+                    <TextInput
+                      value={formDailyQueries}
+                      onChangeText={setFormDailyQueries}
+                      placeholder="e.g. 50"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="number-pad"
+                      className="bg-gray-100 rounded-xl px-4 py-3 text-gray-900 font-outfit-regular"
+                    />
+                  </View>
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                      Daily tokens limit
+                    </Text>
+                    <TextInput
+                      value={formDailyTokens}
+                      onChangeText={setFormDailyTokens}
+                      placeholder="e.g. 100000"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="number-pad"
+                      className="bg-gray-100 rounded-xl px-4 py-3 text-gray-900 font-outfit-regular"
+                    />
+                  </View>
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-outfit-semi-bold mb-2">
+                      Price (format: 0.00, use 0.00 for free)
+                    </Text>
+                    <TextInput
+                      value={formPrice}
+                      onChangeText={setFormPrice}
+                      placeholder="e.g. 99.00 or 0.00"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="decimal-pad"
+                      className="bg-gray-100 rounded-xl px-4 py-3 text-gray-900 font-outfit-regular"
+                    />
+                  </View>
+                  <Button
+                    title={
+                      planModalMode === "create"
+                        ? "Create Plan"
+                        : "Update Plan"
+                    }
+                    onPress={handlePlanFormSubmit}
+                    loading={
+                      createPlanMutation.isPending || updatePlanMutation.isPending
+                    }
+                  />
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -622,5 +992,21 @@ const styles = StyleSheet.create({
   currentPlanBorder: {
     borderWidth: 3,
     borderColor: "#3B82F6",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContentWrap: {
+    maxHeight: "90%",
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: "90%",
   },
 });

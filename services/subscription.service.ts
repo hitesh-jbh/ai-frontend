@@ -157,5 +157,57 @@ export const createSubscriptionService = (axiosInstance: AxiosInstance) => ({
     );
     return response.data.data;
   },
+
+  /**
+   * Create subscription plan (admin only)
+   */
+  async createPlan(data: {
+    planType: "free" | "smart" | "pro" | "creator";
+    name: string;
+    description?: string;
+    dailyQueriesLimit: number;
+    dailyTokensLimit: number;
+    price: string;
+    currency?: string;
+  }): Promise<SubscriptionPlan> {
+    const response = await axiosInstance.post<ApiResponse<SubscriptionPlan>>(
+      "/subscription-plans",
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update subscription plan (admin only)
+   */
+  async updatePlan(
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      dailyQueriesLimit?: number;
+      dailyTokensLimit?: number;
+      price?: string;
+      currency?: string;
+      status?: "active" | "deleted";
+      isActive?: boolean;
+    }
+  ): Promise<SubscriptionPlan> {
+    const response = await axiosInstance.put<ApiResponse<SubscriptionPlan>>(
+      `/subscription-plans/${id}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete subscription plan (admin only, soft delete)
+   */
+  async deletePlan(id: string): Promise<SubscriptionPlan> {
+    const response = await axiosInstance.delete<ApiResponse<SubscriptionPlan>>(
+      `/subscription-plans/${id}`
+    );
+    return response.data.data;
+  },
 });
 

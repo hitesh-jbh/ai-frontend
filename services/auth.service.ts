@@ -22,7 +22,8 @@ export interface ForgotPasswordRequest {
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   role: string;
   points: number;
   createdAt: string;
@@ -185,11 +186,11 @@ export const authService = {
   },
 
   async getProfile(): Promise<
-    User & { bio?: string; profilePicture?: string; upiId?: string }
+    User & { bio?: string; profilePicture?: string; upiId?: string; phone?: string }
   > {
     const accessToken = await SecureStore.getItemAsync("accessToken");
     const response = await axiosInstance.get<
-      ApiResponse<User & { bio?: string; profilePicture?: string; upiId?: string }>
+      ApiResponse<User & { bio?: string; profilePicture?: string; upiId?: string; phone?: string }>
     >("/auth/profile", {
       headers: {
         Authorization: `Bearer ${accessToken}`,

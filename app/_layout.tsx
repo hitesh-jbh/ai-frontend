@@ -4,7 +4,7 @@ import { useFonts } from "expo-font";
 import { SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, Component } from "react";
-import { View, Text, Alert } from "react-native";
+import { View, Text, Alert, LogBox } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import ToastManager from "toastify-react-native";
@@ -14,6 +14,10 @@ import { ReactQueryProvider } from "../lib/react-query";
 import { adMobAdManager } from "../lib/admob-ad-manager";
 import "./globals.css";
 
+// Suppress SafeAreaView deprecation warning from React Native (triggered by a dependency; app uses react-native-safe-area-context)
+LogBox.ignoreLogs([
+  "SafeAreaView has been deprecated",
+]);
 
 class RootErrorBoundary extends Component<
   { children: React.ReactNode },

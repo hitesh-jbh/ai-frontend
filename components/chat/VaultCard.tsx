@@ -18,6 +18,8 @@ export interface VaultCardProps {
   content: string;
   qualityScore?: number;
   tokensUsed?: number;
+  /** Optional weight from backend – displayed as-is (e.g. 70 → "70%") */
+  weight?: number;
   resourceId: string;
   vaultId: string;
   vaultTitle?: string;
@@ -30,6 +32,7 @@ export function VaultCard({
   content,
   qualityScore,
   tokensUsed,
+  weight,
   resourceId,
   vaultId,
   vaultTitle,
@@ -186,8 +189,18 @@ export function VaultCard({
         </Text>
       ) : null}
 
-      {/* Quality score & Tokens used */}
+      {/* Weight badge (when from contributions), Quality score & Tokens used */}
       <View className="flex-row items-center gap-3 mt-2 flex-wrap">
+        {weight != null && (
+          <View className="rounded px-2 py-0.5 bg-indigo-100">
+            <Text
+              className="text-xs font-outfit-semi-bold text-indigo-700"
+              style={{ fontSize: scaleFont(10) }}
+            >
+              weight {weight}%
+            </Text>
+          </View>
+        )}
         {qualityScore != null && qualityScore > 0 && (
           <View className="flex-row items-center">
             <Ionicons name="star" size={14} color="#F59E0B" />

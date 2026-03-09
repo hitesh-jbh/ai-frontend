@@ -38,6 +38,8 @@ type ChatMessage = {
   answerUserId?: string;
   communityAnswers?: any[];
   matchedResources?: any[];
+  /** Sorted desc by weight (safe copy, not mutating API response) */
+  vaultContributions?: { vaultId: string; resourceId: string; answer: string; weight: number; ownerId: string }[];
   vaultId?: string;
   resourceId?: string;
   /** Vault metadata merged from GET /vaults/:vaultId (persisted in thread state) */
@@ -185,24 +187,32 @@ export default function Chat() {
         threadId: currentThreadId,
         aiPreference,
       });
+      // API returns { success, data: { answer, source, vaultId, resourceId, vaultContributions, ... } } – read from response.data
+      const data = (response as { data?: typeof response })?.data ?? response;
+      const rawContributions = data.vaultContributions;
+      const sortedVaultContributions =
+        rawContributions?.length
+          ? [...rawContributions].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
+          : undefined;
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: response.answer,
-        source: response.source,
-        qualityScore: response.qualityScore,
-        tokensUsed: response.tokensUsed,
-        answerId: response.answerId,
-        answerUserId: response.answerUserId ?? undefined,
-        communityAnswers: response.communityAnswers,
-        matchedResources: response.matchedResources,
-        vaultId: response.vaultId,
-        resourceId: response.resourceId,
+        content: data.answer,
+        source: data.source,
+        qualityScore: data.qualityScore,
+        tokensUsed: data.tokensUsed,
+        answerId: data.answerId,
+        answerUserId: data.answerUserId ?? undefined,
+        communityAnswers: data.communityAnswers,
+        matchedResources: data.matchedResources,
+        vaultContributions: sortedVaultContributions,
+        vaultId: data.vaultId,
+        resourceId: data.resourceId,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       // When source is vault: fetch vault details in background and merge into message (non-blocking)
-      if (response.source === "vault" && response.vaultId) {
+      if (data.source === "vault" && data.vaultId) {
         vault
-          .getVaultById(response.vaultId)
+          .getVaultById(data.vaultId)
           .then((v) => {
             setMessages((prev) => {
               const next = [...prev];
@@ -210,7 +220,7 @@ export default function Chat() {
               if (
                 last?.role === "assistant" &&
                 last.source === "vault" &&
-                last.vaultId === response.vaultId
+                last.vaultId === data.vaultId
               ) {
                 next[next.length - 1] = {
                   ...last,
@@ -454,6 +464,7 @@ export default function Chat() {
               qualityScore?: number;
               vaultTitle?: string;
               vaultDescription?: string;
+              vaultContributions?: ChatMessage["vaultContributions"];
             };
             return {
               role: msg.role as "user" | "assistant",
@@ -464,6 +475,7 @@ export default function Chat() {
               qualityScore: p.qualityScore,
               vaultTitle: p.vaultTitle,
               vaultDescription: p.vaultDescription,
+              vaultContributions: p.vaultContributions,
             };
           }
           return {
@@ -600,47 +612,98 @@ export default function Chat() {
                     </Text>
                   </View>
                 </View>
-              ) : msg.source === "vault" && msg.resourceId && msg.vaultId ? (
+              ) : msg.source === "vault" &&
+                ((msg.vaultContributions?.length ?? 0) > 0 ||
+                  (msg.resourceId && msg.vaultId)) ? (
                 <View
                   key={`assistant-${index}`}
                   className="flex-row justify-start my-2"
                 >
                   <View>
-                    <VaultCard
-                      content={msg.content}
-                      qualityScore={msg.qualityScore}
-                      tokensUsed={msg.tokensUsed}
-                      resourceId={msg.resourceId}
-                      vaultId={msg.vaultId}
-                      vaultTitle={msg.vaultTitle}
-                      vaultDescription={msg.vaultDescription}
-                      onViewResource={() =>
-                        router.push(
-                          `/(tabs)/view-resource?id=${msg.resourceId}` as any,
-                        )
-                      }
-                    />
-                    <TouchableOpacity
-                      className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
-                      onPress={() => {
-                        const query =
-                          index > 0 ? messages[index - 1].content : "";
-                        openContributeAnswer(query);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="create-outline"
-                        size={16}
-                        color="#FFFFFF"
-                      />
-                      <Text
-                        className="text-white font-outfit-semi-bold ml-1 text-xs"
-                        style={{ fontSize: scaleFont(12) }}
-                      >
-                        Contribute Answer
-                      </Text>
-                    </TouchableOpacity>
+                    {(() => {
+                      const contributions = msg.vaultContributions ?? [];
+                      const showAsCards = contributions.length > 0;
+                      return showAsCards ? (
+                        <>
+                          {contributions.map((contribution, cIndex) => (
+                          <View key={`${contribution.vaultId}-${contribution.resourceId}-${cIndex}`} className="mb-3">
+                            <VaultCard
+                              content={contribution.answer}
+                              resourceId={contribution.resourceId}
+                              vaultId={contribution.vaultId}
+                              vaultTitle={msg.vaultTitle} 
+                              vaultDescription={msg.vaultDescription}
+                              weight={contribution.weight}
+                              onViewResource={() =>
+                                router.push(
+                                  `/(tabs)/view-resource?id=${contribution.resourceId}` as any,
+                                )
+                              }
+                            />
+                          </View>
+                        ))}
+                        <TouchableOpacity
+                          className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
+                          onPress={() => {
+                            const query =
+                              index > 0 ? messages[index - 1].content : "";
+                            openContributeAnswer(query);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name="create-outline"
+                            size={16}
+                            color="#FFFFFF"
+                          />
+                          <Text
+                            className="text-white font-outfit-semi-bold ml-1 text-xs"
+                            style={{ fontSize: scaleFont(12) }}
+                          >
+                            Contribute Answer
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                      ) : (
+                      <>
+                        <VaultCard
+                          content={msg.content}
+                          qualityScore={msg.qualityScore}
+                          tokensUsed={msg.tokensUsed}
+                          resourceId={msg.resourceId!}
+                          vaultId={msg.vaultId!}
+                          vaultTitle={msg.vaultTitle}
+                          vaultDescription={msg.vaultDescription}
+                          onViewResource={() =>
+                            router.push(
+                              `/(tabs)/view-resource?id=${msg.resourceId}` as any,
+                            )
+                          }
+                        />
+                        <TouchableOpacity
+                          className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
+                          onPress={() => {
+                            const query =
+                              index > 0 ? messages[index - 1].content : "";
+                            openContributeAnswer(query);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name="create-outline"
+                            size={16}
+                            color="#FFFFFF"
+                          />
+                          <Text
+                            className="text-white font-outfit-semi-bold ml-1 text-xs"
+                            style={{ fontSize: scaleFont(12) }}
+                          >
+                            Contribute Answer
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                      );
+                    })()}
                   </View>
                 </View>
               ) : (

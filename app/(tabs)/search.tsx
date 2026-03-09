@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -280,6 +280,23 @@ export default function Search() {
     retry: 1,
     staleTime: 30000, // Cache results for 30 seconds to prevent duplicate calls
   });
+
+  // Sorted vault contributions (desc by weight) — safe copy, do not mutate API response.
+  // Use displayResult in render so vaultContributions are shown in sorted order.
+  const sortedVaultContributions = useMemo(() => {
+    const contributions = searchResult?.vaultContributions;
+    if (!contributions || !Array.isArray(contributions) || contributions.length === 0)
+      return undefined;
+    return [...contributions].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  }, [searchResult?.vaultContributions]);
+
+  const displayResult = useMemo(() => {
+    if (!searchResult) return null;
+    return {
+      ...searchResult,
+      vaultContributions: sortedVaultContributions ?? searchResult.vaultContributions,
+    };
+  }, [searchResult, sortedVaultContributions]);
 
   // Invalidate subscription status after successful search to update usage
   useEffect(() => {
@@ -569,18 +586,18 @@ export default function Search() {
           </View>
         )}
 
-        {searchResult && !isLoading && !isShowingAd && threadId && (
+        {searchResult && displayResult && !isLoading && !isShowingAd && threadId && (
           <View className="mt-4">
             {/* Source Badge */}
             <View className="flex-row items-center justify-between mb-3">
               <View
                 className={`rounded-full px-3 py-1.5 ${getSourceBadgeColor(
-                  searchResult.source,
+                  displayResult.source,
                 )}`}
               >
                 <Text
                   className={`font-outfit-semi-bold ${
-                    getSourceBadgeColor(searchResult.source).split(" ")[1] ||
+                    getSourceBadgeColor(displayResult.source).split(" ")[1] ||
                     "text-gray-700"
                   }`}
                   style={{
@@ -588,10 +605,10 @@ export default function Search() {
                     lineHeight: scaleLineHeight(scaleFont(10), 1.5),
                   }}
                 >
-                  {getSourceLabel(searchResult.source)}
+                  {getSourceLabel(displayResult.source)}
                 </Text>
               </View>
-              {searchResult.qualityScore > 0 && (
+              {displayResult.qualityScore > 0 && (
                 <View className="flex-row items-center">
                   <Ionicons name="star" size={18} color="#F59E0B" />
                   <Text
@@ -601,7 +618,7 @@ export default function Search() {
                       lineHeight: scaleLineHeight(scaleFont(12), 1.4),
                     }}
                   >
-                    {Math.round(searchResult.qualityScore * 100)}%
+                    {Math.round(displayResult.qualityScore * 100)}%
                   </Text>
                 </View>
               )}
@@ -616,13 +633,13 @@ export default function Search() {
                   lineHeight: scaleLineHeight(scaleFont(18), 1.3),
                 }}
               >
-                {searchResult.answer}
+                {displayResult.answer}
               </Text>
             </View>
 
             {/* All Community Answers (if multiple exist) */}
-            {searchResult.communityAnswers &&
-              searchResult.communityAnswers.length > 1 && (
+            {displayResult.communityAnswers &&
+              displayResult.communityAnswers.length > 1 && (
                 <View className="mb-4">
                   <Text
                     className="text-gray-900 font-outfit-semi-bold mb-3"
@@ -632,9 +649,9 @@ export default function Search() {
                     }}
                   >
                     Other Community Answers (
-                    {searchResult.communityAnswers.length - 1})
+                    {displayResult.communityAnswers.length - 1})
                   </Text>
-                  {searchResult.communityAnswers
+                  {displayResult.communityAnswers
                     .slice(1)
                     .map((communityAnswer, index) => (
                       <View
@@ -711,8 +728,8 @@ export default function Search() {
               )}
 
             {/* Matched Resources (Community Layer) */}
-            {searchResult.matchedResources &&
-              searchResult.matchedResources.length > 0 && (
+            {displayResult.matchedResources &&
+              displayResult.matchedResources.length > 0 && (
                 <View className="mb-4">
                   <Text
                     className="text-gray-900 font-outfit-semi-bold mb-3"
@@ -723,7 +740,7 @@ export default function Search() {
                   >
                     Related Resources
                   </Text>
-                  {searchResult.matchedResources.map((resource) => (
+                  {displayResult.matchedResources.map((resource) => (
                     <TouchableOpacity
                       key={resource.id}
                       className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
@@ -823,11 +840,53 @@ export default function Search() {
                 </View>
               )}
 
+            {/* Vault contributions (sorted desc by weight via displayResult) */}
+            {displayResult.vaultContributions &&
+              displayResult.vaultContributions.length > 0 && (
+                <View className="mb-4">
+                  <Text
+                    className="text-gray-900 font-outfit-semi-bold mb-3"
+                    style={{
+                      fontSize: scaleFont(16),
+                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                    }}
+                  >
+                    Vault contributions
+                  </Text>
+                  {displayResult.vaultContributions.map((contribution, index) => (
+                    <View
+                      key={`${contribution.vaultId}-${contribution.resourceId}-${index}`}
+                      className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
+                    >
+                      <Text
+                        className="text-gray-900 font-outfit-regular mb-2"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                      >
+                        {contribution.answer}
+                      </Text>
+                      <View className="flex-row items-center">
+                        <View className="rounded px-2 py-0.5 bg-indigo-100">
+                          <Text
+                            className="text-xs font-outfit-semi-bold text-indigo-700"
+                            style={{ fontSize: scaleFont(10) }}
+                          >
+                            weight {Math.round((contribution.weight ?? 0) * 100)}%
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
             {/* Metadata - Cleaner */}
             <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100">
               <View className="flex-row items-center gap-4">
-                {searchResult.upvotes !== undefined &&
-                  searchResult.upvotes > 0 && (
+                {displayResult.upvotes !== undefined &&
+                  displayResult.upvotes > 0 && (
                     <View className="flex-row items-center">
                       <Ionicons name="thumbs-up" size={18} color="#6B7280" />
                       <Text
@@ -837,11 +896,11 @@ export default function Search() {
                           lineHeight: scaleLineHeight(scaleFont(12), 1.4),
                         }}
                       >
-                        {searchResult.upvotes} upvotes
+                        {displayResult.upvotes} upvotes
                       </Text>
                     </View>
                   )}
-                {searchResult.tokensUsed > 0 && (
+                {displayResult.tokensUsed > 0 && (
                   <View className="flex-row items-center">
                     <Ionicons name="flash" size={16} color="#6B7280" />
                     <Text
@@ -851,7 +910,7 @@ export default function Search() {
                         lineHeight: scaleLineHeight(scaleFont(10), 1.5),
                       }}
                     >
-                      {searchResult.tokensUsed} tokens
+                      {displayResult.tokensUsed} tokens
                     </Text>
                   </View>
                 )}
@@ -866,25 +925,25 @@ export default function Search() {
                   3. Current user is NOT the answer owner (can't upvote own answer)
               */}
               {(() => {
-                const isCommunity = searchResult.source === "community";
-                const hasAnswerId = !!searchResult.answerId;
+                const isCommunity = displayResult.source === "community";
+                const hasAnswerId = !!displayResult.answerId;
                 const isNotOwner =
-                  !searchResult.answerUserId ||
-                  searchResult.answerUserId !== user?.id;
+                  !displayResult.answerUserId ||
+                  displayResult.answerUserId !== user?.id;
                 const shouldShow = isCommunity && hasAnswerId && isNotOwner;
 
                 // Debug logging
                 if (isCommunity) {
                   console.log("[Upvote Button Debug]", {
-                    source: searchResult.source,
-                    answerId: searchResult.answerId,
-                    answerUserId: searchResult.answerUserId,
+                    source: displayResult.source,
+                    answerId: displayResult.answerId,
+                    answerUserId: displayResult.answerUserId,
                     currentUserId: user?.id,
                     isCommunity,
                     hasAnswerId,
                     isNotOwner,
                     shouldShow,
-                    fullSearchResult: JSON.stringify(searchResult, null, 2),
+                    fullSearchResult: JSON.stringify(displayResult, null, 2),
                   });
                 }
 
@@ -895,7 +954,7 @@ export default function Search() {
                     isUpvoted ? "bg-green-500" : "bg-purple-500"
                   }`}
                   onPress={() => {
-                    upvoteMutation.mutate(searchResult.answerId!);
+                    upvoteMutation.mutate(displayResult.answerId!);
                   }}
                   disabled={upvoteMutation.isPending}
                   activeOpacity={0.8}

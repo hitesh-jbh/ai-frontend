@@ -1,7 +1,6 @@
-import { axiosInstance, axiosRefreshInstance } from "../lib/axios";
 import * as SecureStore from "expo-secure-store";
+import { axiosInstance, axiosRefreshInstance } from "../lib/axios";
 
-// Lock to prevent multiple simultaneous refresh attempts
 let refreshPromise: Promise<{ data: { accessToken: string; refreshToken: string }; status: number }> | null = null;
 
 export interface LoginRequest {
@@ -28,6 +27,8 @@ export interface User {
   points: number;
   createdAt: string;
   upiId?: string;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 export interface AuthResponse {
@@ -49,21 +50,45 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+// Helper to clear tokens
+const clearTokens = async () => {
+  await SecureStore.deleteItemAsync("accessToken");
+  await SecureStore.deleteItemAsync("refreshToken");
+};
+
+// Helper to update user in store
+const updateUserInStore = async (userData: Partial<User>) => {
+  try {
+    const { useAuthStore } = await import("../store/auth-store");
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser) {
+      useAuthStore.getState().setUser({
+        ...currentUser,
+        ...userData,
+      });
+    }
+  } catch (error: any) {
+    // Ignore store errors
+    console.log("Failed to update user in store:", error);
+  }
+};
+
 export const authService = {
   async login(credentials: LoginRequest): Promise<AuthResponseWithTokens> {
-    const response = await axiosInstance.post<ApiResponse<AuthResponse>>(
-      "/auth/login",
-      credentials
-    );
-    const { accessToken, refreshToken, user } = response.data.data;
+    try {
+      console.log("[authService] login request to", axiosInstance.defaults.baseURL + "/auth/login", credentials.email);
+      const response = await axiosInstance.post<ApiResponse<AuthResponse>>(
+        "/auth/login",
+        credentials
+      );
 
-    await SecureStore.setItemAsync("accessToken", accessToken);
-    await SecureStore.setItemAsync("refreshToken", refreshToken);
+      const { accessToken, refreshToken, user } = response.data.data;
+      return { accessToken, refreshToken, user } as AuthResponseWithTokens;
+    } catch (error: any) {
+      console.log("[authService] login error", error.response?.status, error.response?.data, error.message);
+      throw error;
+    }
 
-    return {
-      ...response.data.data,
-      user: { ...user, accessToken, refreshToken },
-    };
   },
 
   async register(data: RegisterRequest): Promise<AuthResponseWithTokens> {
@@ -71,14 +96,31 @@ export const authService = {
       "/auth/register",
       data
     );
+
     const { accessToken, refreshToken, user } = response.data.data;
 
+    // Store tokens in SecureStore
     await SecureStore.setItemAsync("accessToken", accessToken);
     await SecureStore.setItemAsync("refreshToken", refreshToken);
 
+    // Create user object with tokens
+    const userWithTokens = {
+      ...user,
+      accessToken,
+      refreshToken,
+    };
+
+    // Update auth store
+    try {
+      const { useAuthStore } = await import("../store/auth-store");
+      useAuthStore.getState().setUser(userWithTokens);
+    } catch (error) {
+      console.log("Failed to update auth store:", error);
+    }
+
     return {
       ...response.data.data,
-      user: { ...user, accessToken, refreshToken },
+      user: userWithTokens,
     };
   },
 
@@ -88,96 +130,125 @@ export const authService = {
 
   async logout(): Promise<void> {
     const refreshToken = await SecureStore.getItemAsync("refreshToken");
+
     if (refreshToken) {
       try {
         await axiosInstance.post("/auth/logout", { refreshToken });
       } catch (error) {
-        // Continue with logout even if API call fails
-        // Logout API error - continue with local logout
+        // Ignore logout API errors
       }
     }
 
-    // Clear tokens
-    await SecureStore.deleteItemAsync("accessToken");
-    await SecureStore.deleteItemAsync("refreshToken");
+    // Clear tokens from SecureStore
+    await clearTokens();
+
+    // Clear user from store
+    try {
+      const { useAuthStore } = await import("../store/auth-store");
+      useAuthStore.getState().logout?.();
+    } catch (error) {
+      console.log("Failed to logout from store:", error);
+    }
   },
 
   async refreshToken(): Promise<{
     data: { accessToken: string; refreshToken: string };
     status: number;
   }> {
-    // If a refresh is already in progress, wait for it instead of starting a new one
-    if (refreshPromise) {
-      return refreshPromise;
-    }
+    // If a refresh is already in progress, return that promise
+    if (refreshPromise) return refreshPromise;
 
-    // Create the refresh promise
     refreshPromise = (async () => {
       try {
-        // Try to get refresh token from user store first (more reliable)
-        // Fallback to SecureStore if not in store
-        let refreshToken: string | null = null;
-        
-        try {
-          // Try to get from store first (if available)
-          const { useAuthStore } = await import("../store/auth-store.js");
-          const user = useAuthStore.getState().user;
-          refreshToken = user?.refreshToken || null;
-        } catch (error) {
-          // Store not available, continue to SecureStore
-        }
-        
-        // Fallback to SecureStore if not in user store
+        // Get refresh token from SecureStore (primary source)
+        let refreshToken = await SecureStore.getItemAsync("refreshToken");
+
+        // If not in SecureStore, try to get from user object in store (fallback)
         if (!refreshToken) {
-          refreshToken = await SecureStore.getItemAsync("refreshToken");
-        }
+          try {
+            const { useAuthStore } = await import("../store/auth-store");
+
         
+            const user = useAuthStore.getState().user;
+            refreshToken = user?.refreshToken || null;
+          } catch {
+            // Store import failed – ignore
+          }
+        }
+
+        // If still no refresh token, user must log in again
         if (!refreshToken) {
-          console.error("No refresh token available in SecureStore or user store");
-          throw new Error("No refresh token available");
+          console.error("No refresh token available – logging out");
+          
+          // Clear any leftover tokens
+          await clearTokens();
+          
+          // Reset the auth store
+          try {
+            const { useAuthStore } = await import("../store/auth-store");
+            useAuthStore.getState().logout?.();
+          } catch {
+            // Ignore store errors
+          }
+
+          throw new Error("NO_REFRESH_TOKEN");
         }
 
         console.log("Refreshing JWT Token");
 
-        // Use axiosRefreshInstance which doesn't have interceptors
-        // This avoids circular dependency when refreshing tokens
+        // Call refresh endpoint
         const response = await axiosRefreshInstance.post<
           ApiResponse<{ accessToken: string; refreshToken: string }>
         >("/auth/refresh", { refreshToken });
 
         const { accessToken, refreshToken: newRefreshToken } = response.data.data;
 
-        if (!accessToken) {
-          console.error("No access token in refresh response");
-          throw new Error("Invalid refresh response - no access token");
-        }
-
-        // Store new tokens in SecureStore
+        // Update tokens in SecureStore
         await SecureStore.setItemAsync("accessToken", accessToken);
         if (newRefreshToken) {
           await SecureStore.setItemAsync("refreshToken", newRefreshToken);
-        } else {
-          // If no new refresh token, keep the old one
-          console.warn("No new refresh token provided, keeping existing one");
         }
 
-        console.log("JWT Token refreshed");
+        // Update user object in store with new tokens
+        try {
+          const { useAuthStore } = await import("../store/auth-store");
+          const currentUser = useAuthStore.getState().user;
+          if (currentUser) {
+            useAuthStore.getState().setUser({
+              ...currentUser,
+              accessToken,
+              refreshToken: newRefreshToken || refreshToken,
+            });
+          }
+        } catch {
+          // Ignore store errors
+        }
+
+        console.log("JWT Token refreshed successfully");
 
         return {
           data: {
             accessToken,
-            refreshToken: newRefreshToken || refreshToken, // Fallback to old token if new one not provided
+            refreshToken: newRefreshToken || refreshToken,
           },
           status: response.status,
         };
       } catch (error: any) {
-        console.error(
-          "Token refresh error:",
-          error?.response?.data || error?.message
-        );
+        console.error("Token refresh error:", error?.response?.data || error?.message);
+        
+        // If it's an auth error, clear tokens
+        if (error?.response?.status === 401 || error?.message === "NO_REFRESH_TOKEN") {
+          await clearTokens();
+          try {
+            const { useAuthStore } = await import("../store/auth-store");
+            useAuthStore.getState().logout?.();
+          } catch {
+            // Ignore store errors
+          }
+        }
+        
         throw error;
       } finally {
-        // Clear the promise so a new refresh can be attempted if needed
         refreshPromise = null;
       }
     })();
@@ -189,6 +260,7 @@ export const authService = {
     User & { bio?: string; profilePicture?: string; upiId?: string; phone?: string }
   > {
     const accessToken = await SecureStore.getItemAsync("accessToken");
+
     const response = await axiosInstance.get<
       ApiResponse<User & { bio?: string; profilePicture?: string; upiId?: string; phone?: string }>
     >("/auth/profile", {
@@ -196,6 +268,39 @@ export const authService = {
         Authorization: `Bearer ${accessToken}`,
       },
     });
-    return response.data.data;
+
+    const profileData = response.data.data;
+
+    // Update user in store with profile data
+    try {
+      const { useAuthStore } = await import("../store/auth-store");
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        useAuthStore.getState().setUser({
+          ...currentUser,
+          ...profileData,
+        });
+      }
+    } catch {
+      // Ignore store errors
+    }
+
+    return profileData;
+  },
+
+  // Helper method to check if user is authenticated
+  async isAuthenticated(): Promise<boolean> {
+    const accessToken = await SecureStore.getItemAsync("accessToken");
+    return !!accessToken;
+  },
+
+  // Helper method to get current tokens
+  async getTokens(): Promise<{ accessToken: string | null; refreshToken: string | null }> {
+    const [accessToken, refreshToken] = await Promise.all([
+      SecureStore.getItemAsync("accessToken"),
+      SecureStore.getItemAsync("refreshToken"),
+    ]);
+    
+    return { accessToken, refreshToken };
   },
 };

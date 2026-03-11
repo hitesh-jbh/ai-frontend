@@ -1,35 +1,35 @@
+import { Ionicons } from "@expo/vector-icons";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
   ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Modal,
-  TextInput,
-  ScrollView,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import RazorpayCheckout from "react-native-razorpay";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  useInfiniteQuery,
-} from "@tanstack/react-query";
+import { Button } from "../../components/ui/Button";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
-import { useSubscriptionStore } from "../../store/subscription-store";
-import { useAuthStore } from "../../store/auth-store";
 import { SubscriptionPlan } from "../../services/subscription.service";
-import { Button } from "../../components/ui/Button";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { showSuccessToast, showErrorToast } from "../../utils/toast";
-import RazorpayCheckout from "react-native-razorpay";
+import { useAuthStore } from "../../store/auth-store";
+import { useSubscriptionStore } from "../../store/subscription-store";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 const PLAN_TYPES = ["free", "smart", "pro", "creator"] as const;
 
@@ -280,8 +280,165 @@ const PlanCard: React.FC<PlanCardProps> = ({
   );
 };
 
+const RECHARGE_GRADIENT: [string, string] = ["#CCFBF1", "#99F6E4"]; // teal-100 to teal-200
+const SPACE_EXTENSION_GRADIENT: [string, string] = ["#E0E7FF", "#C7D2FE"]; // indigo-100 to indigo-200
+
+function SpaceExtensionCard({
+  onBuyPerGb,
+  onBuyYearly,
+  isLoading,
+}: {
+  onBuyPerGb: () => void;
+  onBuyYearly: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <View
+      className="rounded-2xl bg-indigo-50 mb-4 overflow-hidden"
+      style={[styles.planCard, { borderColor: "#6366F1" }]}
+    >
+      <LinearGradient
+        colors={SPACE_EXTENSION_GRADIENT}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="p-6"
+      >
+        <View className="flex-row items-center justify-between mb-4">
+          <View className="flex-1">
+            <Text className="text-2xl font-outfit-bold text-indigo-900 uppercase">
+              Space Extension
+            </Text>
+            <Text className="text-sm font-outfit-regular text-indigo-800 opacity-80 mt-1">
+              Expand vault storage — up to 15 GB per year
+            </Text>
+          </View>
+          <View className="bg-indigo-500 px-3 py-1 rounded-full">
+            <Text className="text-white text-xs font-outfit-semi-bold">
+              Add-on
+            </Text>
+          </View>
+        </View>
+        <View className="mb-4">
+          <View className="flex-row items-center mb-2">
+            <Ionicons name="checkmark-circle" size={20} color="#3730A3" />
+            <Text className="text-indigo-900 font-outfit-regular ml-2">
+              ₹99 per 1 GB (1 year)
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <Ionicons name="checkmark-circle" size={20} color="#3730A3" />
+            <Text className="text-indigo-900 font-outfit-regular ml-2">
+              ₹499 per year — 15 GB
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row gap-3">
+          <TouchableOpacity
+            onPress={onBuyPerGb}
+            disabled={isLoading}
+            className={`flex-1 rounded-xl py-3 px-4 items-center ${isLoading ? "bg-gray-300" : "bg-indigo-600"}`}
+            activeOpacity={0.7}
+          >
+            <Text className="text-white font-outfit-semi-bold text-base">
+              1 GB — ₹99
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onBuyYearly}
+            disabled={isLoading}
+            className={`flex-1 rounded-xl py-3 px-4 items-center ${isLoading ? "bg-gray-300" : "bg-indigo-600"}`}
+            activeOpacity={0.7}
+          >
+            <Text className="text-white font-outfit-semi-bold text-base">
+              15 GB/yr — ₹499
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
+function RechargePackCard({
+  onBuy,
+  isLoading,
+}: {
+  onBuy: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <View
+      className="rounded-2xl bg-teal-50 mb-4 overflow-hidden"
+      style={[styles.planCard, { borderColor: "#2DD4BF" }]}
+    >
+      <LinearGradient
+        colors={RECHARGE_GRADIENT}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="p-6"
+      >
+        <View className="flex-row items-center justify-between mb-4">
+          <View className="flex-1">
+            <Text className="text-2xl font-outfit-bold text-teal-900 uppercase">
+              Recharge Pack
+            </Text>
+            <Text className="text-sm font-outfit-regular text-teal-800 opacity-80 mt-1">
+              Extra usage when you run out — 24 hours validity
+            </Text>
+          </View>
+          <View className="bg-teal-500 px-3 py-1 rounded-full">
+            <Text className="text-white text-xs font-outfit-semi-bold">
+              Add-on
+            </Text>
+          </View>
+        </View>
+        <View className="mb-4">
+          <View className="flex-row items-baseline">
+            <Text className="text-3xl font-outfit-bold text-teal-900">₹49</Text>
+            <Text className="text-base font-outfit-regular text-teal-800 opacity-70 ml-2">
+              one-time
+            </Text>
+          </View>
+        </View>
+        <View className="mb-4">
+          <View className="flex-row items-center mb-2">
+            <Ionicons name="checkmark-circle" size={20} color="#0F766E" />
+            <Text className="text-teal-900 font-outfit-regular ml-2">
+              50 extra queries
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <Ionicons name="checkmark-circle" size={20} color="#0F766E" />
+            <Text className="text-teal-900 font-outfit-regular ml-2">
+              200,000 extra tokens
+            </Text>
+          </View>
+          <View className="flex-row items-center mt-2">
+            <Ionicons name="time-outline" size={20} color="#0F766E" />
+            <Text className="text-teal-900 font-outfit-regular ml-2">
+              Valid for 24 hours
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={onBuy}
+          disabled={isLoading}
+          className={`rounded-xl py-3 px-4 items-center ${isLoading ? "bg-gray-300" : "bg-teal-600"}`}
+          activeOpacity={0.7}
+        >
+          <Text className="text-white font-outfit-semi-bold text-base">
+            {isLoading ? "Processing…" : "Buy Now"}
+          </Text>
+        </TouchableOpacity>
+      </LinearGradient>
+    </View>
+  );
+}
+
+type SpaceExtensionType = "per_gb" | "yearly";
+
 export default function ManageSubscriptions() {
-  const { subscription } = useServices();
+  const { subscription, addon, spaceExtension } = useServices();
   const { setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -289,9 +446,13 @@ export default function ManageSubscriptions() {
 
   // Plan form modal state (create / edit)
   const [planModalVisible, setPlanModalVisible] = useState(false);
-  const [planModalMode, setPlanModalMode] = useState<"create" | "edit">("create");
+  const [planModalMode, setPlanModalMode] = useState<"create" | "edit">(
+    "create",
+  );
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
-  const [formPlanType, setFormPlanType] = useState<"free" | "smart" | "pro" | "creator">("free");
+  const [formPlanType, setFormPlanType] = useState<
+    "free" | "smart" | "pro" | "creator"
+  >("free");
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formDailyQueries, setFormDailyQueries] = useState("");
@@ -304,6 +465,22 @@ export default function ManageSubscriptions() {
     queryFn: () => subscription.getCurrentStatus(),
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  // Fetch addon usage (subscription + addon remaining)
+  const { data: addonUsage } = useQuery({
+    queryKey: ["addonUsage", user?.id],
+    queryFn: () => addon.getUsage(),
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Fetch space extension usage
+  const { data: spaceUsage } = useQuery({
+    queryKey: ["spaceExtensionUsage", user?.id],
+    queryFn: () => spaceExtension.getUsage(),
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
   });
 
   // Fetch available plans with infinite scroll
@@ -355,7 +532,8 @@ export default function ManageSubscriptions() {
     onError: (error: any) => {
       showErrorToast(
         "Error",
-        error?.response?.data?.message || "Failed to activate free subscription"
+        error?.response?.data?.message ||
+          "Failed to activate free subscription",
       );
     },
   });
@@ -366,7 +544,7 @@ export default function ManageSubscriptions() {
     onError: (error: any) => {
       showErrorToast(
         "Error",
-        error?.response?.data?.message || "Failed to create payment order"
+        error?.response?.data?.message || "Failed to create payment order",
       );
     },
   });
@@ -382,7 +560,7 @@ export default function ManageSubscriptions() {
     onSuccess: () => {
       showSuccessToast(
         "Success",
-        "Payment successful! Subscription activated."
+        "Payment successful! Subscription activated.",
       );
       // Invalidate all subscription status queries to ensure all components update
       queryClient.invalidateQueries({
@@ -397,7 +575,78 @@ export default function ManageSubscriptions() {
       showErrorToast(
         "Payment Failed",
         error?.response?.data?.message ||
-          "Payment verification failed. Please try again."
+          "Payment verification failed. Please try again.",
+      );
+    },
+  });
+
+  // Addon: create order for Recharge Pack
+  const createAddonOrderMutation = useMutation({
+    mutationFn: () => addon.createOrder(),
+    onError: (error: any) => {
+      showErrorToast(
+        "Error",
+        error?.response?.data?.message || "Failed to create payment order",
+      );
+    },
+  });
+
+  // Addon: verify payment and activate Recharge Pack
+  const verifyAddonPaymentMutation = useMutation({
+    mutationFn: (data: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    }) => addon.verifyPayment(data),
+    onSuccess: () => {
+      showSuccessToast(
+        "Success",
+        "Recharge Pack activated! 50 queries or 200k tokens for 24h.",
+      );
+      queryClient.invalidateQueries({ queryKey: ["addonUsage", user?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["subscriptionStatus", user?.id],
+      });
+    },
+    onError: (error: any) => {
+      showErrorToast(
+        "Payment Failed",
+        error?.response?.data?.message || "Recharge Pack verification failed.",
+      );
+    },
+  });
+
+  // Space Extension: create order
+  const createSpaceOrderMutation = useMutation({
+    mutationFn: (type: SpaceExtensionType) => spaceExtension.createOrder(type),
+    onError: (error: any) => {
+      showErrorToast(
+        "Error",
+        error?.response?.data?.message || "Failed to create payment order",
+      );
+    },
+  });
+
+  // Space Extension: verify payment
+  const verifySpacePaymentMutation = useMutation({
+    mutationFn: (data: {
+      type: SpaceExtensionType;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    }) => spaceExtension.verifyPayment(data),
+    onSuccess: (_, variables) => {
+      const label = variables.type === "per_gb" ? "1 GB" : "15 GB/year";
+      showSuccessToast("Success", `Space Extension (${label}) activated.`);
+      queryClient.invalidateQueries({
+        queryKey: ["spaceExtensionUsage", user?.id],
+      });
+    },
+    onError: (error: any) => {
+      showErrorToast(
+        "Payment Failed",
+        error?.response?.data?.message ||
+          "Space Extension verification failed.",
       );
     },
   });
@@ -422,7 +671,7 @@ export default function ManageSubscriptions() {
     onError: (error: any) => {
       showErrorToast(
         "Error",
-        error?.response?.data?.message || "Failed to create plan"
+        error?.response?.data?.message || "Failed to create plan",
       );
     },
   });
@@ -452,7 +701,7 @@ export default function ManageSubscriptions() {
     onError: (error: any) => {
       showErrorToast(
         "Error",
-        error?.response?.data?.message || "Failed to update plan"
+        error?.response?.data?.message || "Failed to update plan",
       );
     },
   });
@@ -467,7 +716,7 @@ export default function ManageSubscriptions() {
     onError: (error: any) => {
       showErrorToast(
         "Error",
-        error?.response?.data?.message || "Failed to delete plan"
+        error?.response?.data?.message || "Failed to delete plan",
       );
     },
   });
@@ -511,7 +760,7 @@ export default function ManageSubscriptions() {
           style: "destructive",
           onPress: () => deletePlanMutation.mutate(plan.id),
         },
-      ]
+      ],
     );
   };
 
@@ -599,7 +848,7 @@ export default function ManageSubscriptions() {
       if (!RazorpayCheckout || typeof RazorpayCheckout.open !== "function") {
         showErrorToast(
           "Payment Unavailable",
-          "Razorpay payment is not available in this environment. Please use a development build or contact support."
+          "Razorpay payment is not available in this environment. Please use a development build or contact support.",
         );
         return;
       }
@@ -610,7 +859,7 @@ export default function ManageSubscriptions() {
       if (!orderData.order || !orderData.keyId) {
         showErrorToast(
           "Error",
-          "Failed to initialize payment. Please try again."
+          "Failed to initialize payment. Please try again.",
         );
         return;
       }
@@ -649,12 +898,12 @@ export default function ManageSubscriptions() {
       if (error?.code === "BAD_REQUEST_ERROR") {
         showErrorToast(
           "Payment Error",
-          error?.description || "Invalid payment details"
+          error?.description || "Invalid payment details",
         );
       } else if (error?.code === "NETWORK_ERROR") {
         showErrorToast(
           "Network Error",
-          "Please check your internet connection"
+          "Please check your internet connection",
         );
       } else if (error?.code === "INVALID_OPTIONS") {
         showErrorToast("Payment Error", "Invalid payment configuration");
@@ -664,7 +913,7 @@ export default function ManageSubscriptions() {
           "Payment Failed",
           error?.response?.data?.message ||
             error?.message ||
-            "Payment could not be completed"
+            "Payment could not be completed",
         );
       }
     }
@@ -672,6 +921,101 @@ export default function ManageSubscriptions() {
 
   const handleSelectFree = () => {
     createFreeMutation.mutate();
+  };
+
+  const handleBuyRechargePack = async () => {
+    try {
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== "function") {
+        showErrorToast(
+          "Payment Unavailable",
+          "Razorpay is not available in this environment.",
+        );
+        return;
+      }
+      const orderData = await createAddonOrderMutation.mutateAsync();
+      if (!orderData?.order || !orderData?.keyId) {
+        showErrorToast("Error", "Failed to initialize payment.");
+        return;
+      }
+      const options = {
+        description: "Recharge Pack — 50 queries or 200k tokens, 24h",
+        currency: orderData.product?.currency || "INR",
+        key: orderData.keyId,
+        amount: orderData.order.amount,
+        name: "Connect Knowledge Vault",
+        order_id: orderData.order.id,
+        prefill: {
+          email: user?.email || "",
+          contact: (user as any)?.phone || "",
+          name: user?.name || "",
+        },
+        theme: { color: "#0D9488" },
+      };
+      const razorpayResponse = await RazorpayCheckout.open(options);
+      if (razorpayResponse) {
+        await verifyAddonPaymentMutation.mutateAsync({
+          razorpayOrderId: razorpayResponse.razorpay_order_id,
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        });
+      }
+    } catch (error: any) {
+      if (error?.code === "USER_CANCELLED") return;
+      showErrorToast(
+        "Payment Failed",
+        error?.response?.data?.message ||
+          error?.message ||
+          "Payment could not be completed",
+      );
+    }
+  };
+
+  const handleBuySpaceExtension = async (type: SpaceExtensionType) => {
+    try {
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== "function") {
+        showErrorToast(
+          "Payment Unavailable",
+          "Razorpay is not available in this environment.",
+        );
+        return;
+      }
+      const orderData = await createSpaceOrderMutation.mutateAsync(type);
+      if (!orderData?.order || !orderData?.keyId) {
+        showErrorToast("Error", "Failed to initialize payment.");
+        return;
+      }
+      const options = {
+        description: orderData.product?.name || "Space Extension",
+        currency: orderData.product?.currency || "INR",
+        key: orderData.keyId,
+        amount: orderData.order.amount,
+        name: "Connect Knowledge Vault",
+        order_id: orderData.order.id,
+        prefill: {
+          email: user?.email || "",
+          contact: (user as any)?.phone || "",
+          name: user?.name || "",
+        },
+        theme: { color: "#6366F1" },
+      };
+      const razorpayResponse = await RazorpayCheckout.open(options);
+      if (razorpayResponse) {
+        await verifySpacePaymentMutation.mutateAsync({
+          type,
+          razorpayOrderId: razorpayResponse.razorpay_order_id,
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        });
+      }
+    } catch (error: any) {
+      if (error?.code === "USER_CANCELLED") return;
+      showErrorToast(
+        "Payment Failed",
+        error?.response?.data?.message ||
+          error?.message ||
+          "Payment could not be completed",
+      );
+    }
   };
 
   const currentPlan = currentStatus?.subscription;
@@ -727,6 +1071,48 @@ export default function ManageSubscriptions() {
                         {currentPlan.dailyTokensLimit.toLocaleString()}
                       </Text>
                     </View>
+                    {spaceUsage &&
+                      spaceUsage.storageRemainingGb > 0 && (
+                        <View className="mt-3 pt-3 border-t border-blue-200">
+                          <Text className="text-blue-800 text-sm font-outfit-semi-bold mb-1">
+                            Space Extension (add-on)
+                          </Text>
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-blue-700 text-sm font-outfit-regular">
+                              Expandable storage
+                            </Text>
+                            <Text className="text-blue-900 text-sm font-outfit-semi-bold">
+                              {spaceUsage.storageRemainingGb} GB remaining
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    {addonUsage &&
+                      (addonUsage.addon.queriesRemaining > 0 ||
+                        addonUsage.addon.tokensRemaining > 0) && (
+                        <View className="mt-3 pt-3 border-t border-blue-200">
+                          <Text className="text-blue-800 text-sm font-outfit-semi-bold mb-1">
+                            Recharge Pack (add-on)
+                          </Text>
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-blue-700 text-sm font-outfit-regular">
+                              Extra queries
+                            </Text>
+                            <Text className="text-blue-900 text-sm font-outfit-semi-bold">
+                              {addonUsage.addon.queriesRemaining} left
+                            </Text>
+                          </View>
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-blue-700 text-sm font-outfit-regular">
+                              Extra tokens
+                            </Text>
+                            <Text className="text-blue-900 text-sm font-outfit-semi-bold">
+                              {addonUsage.addon.tokensRemaining.toLocaleString()}{" "}
+                              left
+                            </Text>
+                          </View>
+                        </View>
+                      )}
                     {currentPlan.expiresAt && (
                       <View className="flex-row items-center justify-between">
                         <Text className="text-blue-700 text-sm font-outfit-regular">
@@ -801,13 +1187,32 @@ export default function ManageSubscriptions() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingBottom: 24 }}
             ListHeaderComponent={
-              plans.length > 0 ? (
-                <View className="px-6 pb-4">
+              <View className="px-6 pb-4">
+                <View className="mb-4">
+                  <SpaceExtensionCard
+                    onBuyPerGb={() => handleBuySpaceExtension("per_gb")}
+                    onBuyYearly={() => handleBuySpaceExtension("yearly")}
+                    isLoading={
+                      createSpaceOrderMutation.isPending ||
+                      verifySpacePaymentMutation.isPending
+                    }
+                  />
+                </View>
+                <View className="mb-4">
+                  <RechargePackCard
+                    onBuy={handleBuyRechargePack}
+                    isLoading={
+                      createAddonOrderMutation.isPending ||
+                      verifyAddonPaymentMutation.isPending
+                    }
+                  />
+                </View>
+                {plans.length > 0 ? (
                   <Text className="text-gray-900 text-xl font-outfit-bold">
                     Available Plans
                   </Text>
-                </View>
-              ) : null
+                ) : null}
+              </View>
             }
             ListEmptyComponent={
               <View className="items-center justify-center py-20 px-6">
@@ -877,12 +1282,16 @@ export default function ManageSubscriptions() {
                             key={type}
                             onPress={() => setFormPlanType(type)}
                             className={`px-4 py-2 rounded-lg ${
-                              formPlanType === type ? "bg-blue-600" : "bg-gray-100"
+                              formPlanType === type
+                                ? "bg-blue-600"
+                                : "bg-gray-100"
                             }`}
                           >
                             <Text
                               className={`font-outfit-medium ${
-                                formPlanType === type ? "text-white" : "text-gray-700"
+                                formPlanType === type
+                                  ? "text-white"
+                                  : "text-gray-700"
                               }`}
                             >
                               {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -963,13 +1372,12 @@ export default function ManageSubscriptions() {
                   </View>
                   <Button
                     title={
-                      planModalMode === "create"
-                        ? "Create Plan"
-                        : "Update Plan"
+                      planModalMode === "create" ? "Create Plan" : "Update Plan"
                     }
                     onPress={handlePlanFormSubmit}
                     loading={
-                      createPlanMutation.isPending || updatePlanMutation.isPending
+                      createPlanMutation.isPending ||
+                      updatePlanMutation.isPending
                     }
                   />
                 </ScrollView>

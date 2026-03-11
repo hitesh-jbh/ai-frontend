@@ -44,6 +44,7 @@ export default function Search() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [aiPreference] = useState<"short" | "medium" | "deep_search">("medium");
   const [showThreadsModal, setShowThreadsModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false); // new state for history modal
   const [userAnswer, setUserAnswer] = useState("");
   const [isShowingAd, setIsShowingAd] = useState(false);
   const [pendingAdTracking, setPendingAdTracking] =
@@ -55,6 +56,7 @@ export default function Search() {
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
+
   // Fetch subscription status on mount
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
     queryKey: ["subscriptionStatus", user?.id],
@@ -515,13 +517,39 @@ export default function Search() {
         title="Search"
         showBackButton
         rightElement={
-          <TouchableOpacity
-            onPress={() => setShowThreadsModal(true)}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-3">
+            {/* Time icon - opens search history modal */}
+            <TouchableOpacity
+              onPress={() => setShowHistoryModal(true)}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={22} color="#3B82F6" />
+            </TouchableOpacity>
+
+            {/* Plus icon - creates a new thread (resets current thread) */}
+            <TouchableOpacity
+              onPress={() => {
+                setThreadId(null); // reset thread
+                setSearchTrigger(null); // clear search results
+                setSearchQuery(""); // optional: clear input
+                setDebouncedQuery("");
+              }}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+
+            {/* Three dots - threads modal (existing) */}
+            <TouchableOpacity
+              onPress={() => setShowThreadsModal(true)}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+            </TouchableOpacity>
+          </View>
         }
       />
       <View className="px-6 pb-4 border-b border-gray-200">
@@ -1128,7 +1156,107 @@ export default function Search() {
           )}
       </ScrollView>
 
-      {/* Threads Modal */}
+      {/* History Modal */}
+      <Modal
+        visible={showHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowHistoryModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-end"
+          activeOpacity={1}
+          onPress={() => setShowHistoryModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            className="bg-white rounded-t-3xl max-h-[70%]"
+          >
+            <View className="p-6 border-b border-gray-200">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-gray-900 text-xl font-outfit-bold">
+                  Recent Searches
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowHistoryModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <ScrollView
+              className="max-h-96"
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {searchHistory && searchHistory.length > 0 ? (
+                <View className="p-4">
+                  {searchHistory.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      className="bg-gray-50 rounded-xl p-4 mb-2"
+                      onPress={() => {
+                        handleHistorySelect(item);
+                        setShowHistoryModal(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        className="text-gray-900 font-outfit-regular"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                      >
+                        {item.query}
+                      </Text>
+                      <View className="flex-row items-center mt-1">
+                        {item.resultCount > 0 && (
+                          <Text
+                            className="text-gray-500 font-outfit-regular mr-3"
+                            style={{
+                              fontSize: scaleFont(10),
+                              lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                            }}
+                          >
+                            {item.resultCount} results
+                          </Text>
+                        )}
+                        <Text
+                          className="text-gray-400 font-outfit-regular"
+                          style={{
+                            fontSize: scaleFont(10),
+                            lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                          }}
+                        >
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View className="p-8 items-center">
+                  <Ionicons name="search-outline" size={48} color="#9CA3AF" />
+                  <Text
+                    className="text-gray-500 font-outfit-regular mt-4 text-center"
+                    style={{
+                      fontSize: scaleFont(14),
+                      lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                    }}
+                  >
+                    No recent searches
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Threads Modal (unchanged) */}
       <Modal
         visible={showThreadsModal}
         animationType="slide"
@@ -1224,7 +1352,7 @@ export default function Search() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Submit Answer Modal */}
+      {/* Submit Answer Modal (unchanged) */}
       <Modal
         visible={showSubmitAnswer}
         animationType="fade"
@@ -1264,7 +1392,6 @@ export default function Search() {
               <KeyboardAwareScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
-                // bottomOffset={20}
               >
                 <View className="p-6">
                   <View className="mb-4">

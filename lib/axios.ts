@@ -5,7 +5,8 @@ import * as SecureStore from "expo-secure-store";
 // Update this with your actual backend URL
 // For development: http://192.168.X.X:5000 (your machine's local IP)
 // For production: https://your-api.com
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.29.98:5000";
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || "http://knowvaults.com:8080/api";
 
 // log to help debug connection issues
 console.log("[axios] using base URL:", BASE_URL);

@@ -74,6 +74,7 @@ const TabsLayout = () => {
       <Tabs.Screen
         name="chat"
         options={{
+          href: null, // Hide Chat button from tab bar
           title: "Chat",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons

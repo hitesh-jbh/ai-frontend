@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Modal,
   ScrollView,
   Text,
@@ -50,9 +51,13 @@ export default function Search() {
   const [pendingAdTracking, setPendingAdTracking] =
     useState<PendingAdTracking | null>(null);
   const [isUpvoted, setIsUpvoted] = useState<boolean>(false);
+  const [showResourcesModal, setShowResourcesModal] = useState(false);
+  const [resourceIds, setResourceIds] = useState<string[]>([]);
+  const [fetchedResources, setFetchedResources] = useState<any[] | null>(null);
+  const [isFetchingResources, setIsFetchingResources] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
   const services = useServices();
-  const { search, subscription, searchAdRevenue } = services;
+  const { search, subscription, searchAdRevenue, vault, resource } = services;
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
@@ -287,7 +292,11 @@ export default function Search() {
   // Use displayResult in render so vaultContributions are shown in sorted order.
   const sortedVaultContributions = useMemo(() => {
     const contributions = searchResult?.vaultContributions;
-    if (!contributions || !Array.isArray(contributions) || contributions.length === 0)
+    if (
+      !contributions ||
+      !Array.isArray(contributions) ||
+      contributions.length === 0
+    )
       return undefined;
     return [...contributions].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
   }, [searchResult?.vaultContributions]);
@@ -296,9 +305,38 @@ export default function Search() {
     if (!searchResult) return null;
     return {
       ...searchResult,
-      vaultContributions: sortedVaultContributions ?? searchResult.vaultContributions,
+      vaultContributions:
+        sortedVaultContributions ?? searchResult.vaultContributions,
     };
   }, [searchResult, sortedVaultContributions]);
+
+  // Extract resourceIds from vault search response
+  useEffect(() => {
+    if (!searchResult) {
+      setResourceIds([]);
+      setFetchedResources(null);
+      return;
+    }
+    const ids: string[] = [];
+    const anyResult = searchResult as any;
+
+    if (Array.isArray(anyResult.resourceIds)) {
+      ids.push(...anyResult.resourceIds);
+    }
+    if (typeof anyResult.resourceId === "string" && anyResult.resourceId) {
+      ids.push(anyResult.resourceId);
+    }
+    if (Array.isArray(anyResult.vaultContributions)) {
+      ids.push(
+        ...anyResult.vaultContributions
+          .map((c: any) => c?.resourceId)
+          .filter((x: any) => typeof x === "string" && x),
+      );
+    }
+
+    setResourceIds([...new Set(ids)]);
+    setFetchedResources(null);
+  }, [searchResult]);
 
   // Invalidate subscription status after successful search to update usage
   useEffect(() => {
@@ -402,6 +440,16 @@ export default function Search() {
     },
   });
 
+  // Fetch vault by vaultId from search result (for description)
+  const vaultIdFromResult = searchResult?.vaultId;
+  const { data: vaultData } = useQuery({
+    queryKey: ["vaultById", vaultIdFromResult],
+    queryFn: () => vault.getVaultById(vaultIdFromResult!),
+    enabled: !!vaultIdFromResult,
+  });
+
+  // (thread-related / extra resource mapping removed)
+
   // Upvote answer mutation
   const upvoteMutation = useMutation({
     mutationFn: (answerId: string) => search.upvoteAnswer(answerId),
@@ -483,6 +531,7 @@ export default function Search() {
 
   const getSourceBadgeColor = (source: string) => {
     const colors: Record<string, string> = {
+      vault: "bg-indigo-100 text-indigo-700",
       cache: "bg-green-100 text-green-700",
       competitive: "bg-blue-100 text-blue-700",
       community: "bg-purple-100 text-purple-700",
@@ -494,6 +543,7 @@ export default function Search() {
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
+      vault: "Vault",
       cache: "Cached",
       competitive: "AI-Free Answer",
       community: "Community",
@@ -511,11 +561,52 @@ export default function Search() {
     staleTime: 10000,
   });
 
+  // Back button: show recent searches if user has results; otherwise leave search screen
+  const handleBackPress = React.useCallback(() => {
+    if (searchTrigger || threadId) {
+      setSearchTrigger(null);
+      setThreadId(null);
+      setSearchQuery("");
+      setDebouncedQuery("");
+    } else {
+      router.back();
+    }
+  }, [searchTrigger, threadId]);
+
+  // Android hardware back: same behavior as header back
+  useFocusEffect(
+    React.useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (searchTrigger || threadId) {
+          handleBackPress();
+          return true; // prevent default navigation to Home
+        }
+        return false; // allow default stack back
+      });
+      return () => sub.remove();
+    }, [searchTrigger, threadId, handleBackPress]),
+  );
+
+  const handleOpenResources = React.useCallback(async () => {
+    if (!resourceIds || resourceIds.length === 0) return;
+    setIsFetchingResources(true);
+    try {
+      const results = await Promise.all(resourceIds.map((id) => resource.getResource(id)));
+      setFetchedResources(results);
+      setShowResourcesModal(true);
+    } catch (e: any) {
+      showErrorToast("Error", e?.message || "Failed to fetch resources");
+    } finally {
+      setIsFetchingResources(false);
+    }
+  }, [resourceIds, resource]);
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader
         title="Search"
         showBackButton
+        onBackPress={handleBackPress}
         rightElement={
           <View className="flex-row items-center gap-3">
             {/* Time icon - opens search history modal */}
@@ -614,307 +705,158 @@ export default function Search() {
           </View>
         )}
 
-        {searchResult && displayResult && !isLoading && !isShowingAd && threadId && (
-          <View className="mt-4">
-            {/* Source Badge */}
-            <View className="flex-row items-center justify-between mb-3">
-              <View
-                className={`rounded-full px-3 py-1.5 ${getSourceBadgeColor(
-                  displayResult.source,
-                )}`}
-              >
+        {searchResult &&
+          displayResult &&
+          !isLoading &&
+          !isShowingAd &&
+          threadId && (
+            <View className="mt-4">
+              {/* Vault Tag (Source Badge) */}
+              <View className="flex-row items-center mb-3">
+                <View
+                  className={`rounded-full px-3 py-1.5 ${getSourceBadgeColor(
+                    displayResult.source,
+                  )}`}
+                >
+                  <Text
+                    className={`font-outfit-semi-bold ${
+                      getSourceBadgeColor(displayResult.source).split(" ")[1] ||
+                      "text-gray-700"
+                    }`}
+                    style={{
+                      fontSize: scaleFont(10),
+                      lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                    }}
+                  >
+                    {getSourceLabel(displayResult.source)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Vault description (fetched by vaultId from response) */}
+              {vaultData?.description && (
+                <View className="mb-3 px-1">
+                  <Text
+                    className="text-gray-600 font-outfit-regular"
+                    style={{
+                      fontSize: scaleFont(13),
+                      lineHeight: scaleLineHeight(scaleFont(13), 1.4),
+                    }}
+                  >
+                    {vaultData.description}
+                  </Text>
+                </View>
+              )}
+
+              {/* Vault Answer (from API response only) */}
+              <View className="bg-gray-50 rounded-2xl p-5 mb-4">
                 <Text
-                  className={`font-outfit-semi-bold ${
-                    getSourceBadgeColor(displayResult.source).split(" ")[1] ||
-                    "text-gray-700"
-                  }`}
+                  className="text-gray-900 font-outfit-regular"
                   style={{
-                    fontSize: scaleFont(10),
-                    lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                    fontSize: scaleFont(18),
+                    lineHeight: scaleLineHeight(scaleFont(18), 1.3),
                   }}
                 >
-                  {getSourceLabel(displayResult.source)}
+                  {displayResult.answer ?? ""}
                 </Text>
               </View>
-              {displayResult.qualityScore > 0 && (
-                <View className="flex-row items-center">
-                  <Ionicons name="star" size={18} color="#F59E0B" />
-                  <Text
-                    className="text-gray-700 font-outfit-semi-bold ml-1"
-                    style={{
-                      fontSize: scaleFont(12),
-                      lineHeight: scaleLineHeight(scaleFont(12), 1.4),
-                    }}
-                  >
-                    {Math.round(displayResult.qualityScore * 100)}%
-                  </Text>
-                </View>
-              )}
-            </View>
 
-            {/* Show answer text for all layers (including competitive) */}
-            <View className="bg-gray-50 rounded-2xl p-5 mb-4">
-              <Text
-                className="text-gray-900 font-outfit-regular"
-                style={{
-                  fontSize: scaleFont(18),
-                  lineHeight: scaleLineHeight(scaleFont(18), 1.3),
-                }}
-              >
-                {displayResult.answer}
-              </Text>
-            </View>
-
-            {/* All Community Answers (if multiple exist) */}
-            {displayResult.communityAnswers &&
-              displayResult.communityAnswers.length > 1 && (
-                <View className="mb-4">
-                  <Text
-                    className="text-gray-900 font-outfit-semi-bold mb-3"
-                    style={{
-                      fontSize: scaleFont(16),
-                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                    }}
-                  >
-                    Other Community Answers (
-                    {displayResult.communityAnswers.length - 1})
-                  </Text>
-                  {displayResult.communityAnswers
-                    .slice(1)
-                    .map((communityAnswer, index) => (
-                      <View
-                        key={communityAnswer.answerId}
-                        className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                      >
-                        <Text
-                          className="text-gray-900 font-outfit-regular mb-3"
-                          style={{
-                            fontSize: scaleFont(16),
-                            lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                          }}
+              {/* All Community Answers (if multiple exist) */}
+              {displayResult.communityAnswers &&
+                displayResult.communityAnswers.length > 1 && (
+                  <View className="mb-4">
+                    <Text
+                      className="text-gray-900 font-outfit-semi-bold mb-3"
+                      style={{
+                        fontSize: scaleFont(16),
+                        lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                      }}
+                    >
+                      Other Community Answers (
+                      {displayResult.communityAnswers.length - 1})
+                    </Text>
+                    {displayResult.communityAnswers
+                      .slice(1)
+                      .map((communityAnswer, index) => (
+                        <View
+                          key={communityAnswer.answerId}
+                          className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
                         >
-                          {communityAnswer.answer}
-                        </Text>
-                        <View className="flex-row items-center justify-between">
-                          <View className="flex-row items-center">
-                            {communityAnswer.upvotes > 0 && (
-                              <View className="flex-row items-center mr-3">
-                                <Ionicons
-                                  name="thumbs-up"
-                                  size={16}
-                                  color="#6B7280"
-                                />
-                                <Text
-                                  className="text-gray-700 font-outfit-regular ml-1"
-                                  style={{
-                                    fontSize: scaleFont(12),
-                                    lineHeight: scaleLineHeight(
-                                      scaleFont(12),
-                                      1.4,
-                                    ),
-                                  }}
-                                >
-                                  {communityAnswer.upvotes} upvotes
-                                </Text>
-                              </View>
+                          <Text
+                            className="text-gray-900 font-outfit-regular mb-3"
+                            style={{
+                              fontSize: scaleFont(16),
+                              lineHeight: scaleLineHeight(scaleFont(16), 1.3),
+                            }}
+                          >
+                            {communityAnswer.answer}
+                          </Text>
+                          <View className="flex-row items-center justify-between">
+                            <View className="flex-row items-center">
+                              {communityAnswer.upvotes > 0 && (
+                                <View className="flex-row items-center mr-3">
+                                  <Ionicons
+                                    name="thumbs-up"
+                                    size={16}
+                                    color="#6B7280"
+                                  />
+                                  <Text
+                                    className="text-gray-700 font-outfit-regular ml-1"
+                                    style={{
+                                      fontSize: scaleFont(12),
+                                      lineHeight: scaleLineHeight(
+                                        scaleFont(12),
+                                        1.4,
+                                      ),
+                                    }}
+                                  >
+                                    {communityAnswer.upvotes} upvotes
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            {communityAnswer.answerUserId !== user?.id && (
+                              <TouchableOpacity
+                                className="bg-purple-500 rounded-lg px-4 py-2"
+                                onPress={() => {
+                                  upvoteMutation.mutate(
+                                    communityAnswer.answerId,
+                                  );
+                                }}
+                                disabled={upvoteMutation.isPending}
+                                activeOpacity={0.8}
+                              >
+                                <View className="flex-row items-center">
+                                  <Ionicons
+                                    name="thumbs-up"
+                                    size={16}
+                                    color="#FFFFFF"
+                                  />
+                                  <Text
+                                    className="text-white font-outfit-semi-bold ml-1"
+                                    style={{
+                                      fontSize: scaleFont(12),
+                                      lineHeight: scaleLineHeight(
+                                        scaleFont(12),
+                                        1.4,
+                                      ),
+                                    }}
+                                  >
+                                    Upvote
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
                             )}
                           </View>
-                          {communityAnswer.answerUserId !== user?.id && (
-                            <TouchableOpacity
-                              className="bg-purple-500 rounded-lg px-4 py-2"
-                              onPress={() => {
-                                upvoteMutation.mutate(communityAnswer.answerId);
-                              }}
-                              disabled={upvoteMutation.isPending}
-                              activeOpacity={0.8}
-                            >
-                              <View className="flex-row items-center">
-                                <Ionicons
-                                  name="thumbs-up"
-                                  size={16}
-                                  color="#FFFFFF"
-                                />
-                                <Text
-                                  className="text-white font-outfit-semi-bold ml-1"
-                                  style={{
-                                    fontSize: scaleFont(12),
-                                    lineHeight: scaleLineHeight(
-                                      scaleFont(12),
-                                      1.4,
-                                    ),
-                                  }}
-                                >
-                                  Upvote
-                                </Text>
-                              </View>
-                            </TouchableOpacity>
-                          )}
                         </View>
-                      </View>
-                    ))}
-                </View>
-              )}
+                      ))}
+                  </View>
+                )}
 
-            {/* Matched Resources (Community Layer) */}
-            {displayResult.matchedResources &&
-              displayResult.matchedResources.length > 0 && (
-                <View className="mb-4">
-                  <Text
-                    className="text-gray-900 font-outfit-semi-bold mb-3"
-                    style={{
-                      fontSize: scaleFont(16),
-                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                    }}
-                  >
-                    Related Resources
-                  </Text>
-                  {displayResult.matchedResources.map((resource) => (
-                    <TouchableOpacity
-                      key={resource.id}
-                      className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                      onPress={async () => {
-                        // Navigate to resource view - this will track the view automatically
-                        router.push(`/(tabs)/view-resource?id=${resource.id}`);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View className="flex-row items-start">
-                        <View
-                          className="rounded-lg p-2 mr-3"
-                          style={{
-                            backgroundColor:
-                              resource.type === "video"
-                                ? "#3B82F620"
-                                : resource.type === "pdf"
-                                  ? "#EF444420"
-                                  : resource.type === "note"
-                                    ? "#10B98120"
-                                    : "#F59E0B20",
-                          }}
-                        >
-                          <Ionicons
-                            name={
-                              resource.type === "video"
-                                ? "videocam"
-                                : resource.type === "pdf"
-                                  ? "document-text"
-                                  : resource.type === "note"
-                                    ? "document"
-                                    : "link"
-                            }
-                            size={24}
-                            color={
-                              resource.type === "video"
-                                ? "#3B82F6"
-                                : resource.type === "pdf"
-                                  ? "#EF4444"
-                                  : resource.type === "note"
-                                    ? "#10B981"
-                                    : "#F59E0B"
-                            }
-                          />
-                        </View>
-                        <View className="flex-1">
-                          <Text
-                            className="text-gray-900 font-outfit-semi-bold mb-1"
-                            style={{
-                              fontSize: scaleFont(14),
-                              lineHeight: scaleLineHeight(scaleFont(14), 1.4),
-                            }}
-                            numberOfLines={2}
-                          >
-                            {resource.title}
-                          </Text>
-                          <View className="flex-row items-center mt-1">
-                            <View
-                              className="rounded px-2 py-0.5 mr-2"
-                              style={{
-                                backgroundColor:
-                                  resource.type === "video"
-                                    ? "#3B82F610"
-                                    : resource.type === "pdf"
-                                      ? "#EF444410"
-                                      : resource.type === "note"
-                                        ? "#10B98110"
-                                        : "#F59E0B10",
-                              }}
-                            >
-                              <Text
-                                className="text-xs font-outfit-semi-bold uppercase"
-                                style={{
-                                  color:
-                                    resource.type === "video"
-                                      ? "#3B82F6"
-                                      : resource.type === "pdf"
-                                        ? "#EF4444"
-                                        : resource.type === "note"
-                                          ? "#10B981"
-                                          : "#F59E0B",
-                                }}
-                              >
-                                {resource.type}
-                              </Text>
-                            </View>
-                            <Ionicons
-                              name="chevron-forward"
-                              size={16}
-                              color="#9CA3AF"
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-            {/* Vault contributions (sorted desc by weight via displayResult) */}
-            {displayResult.vaultContributions &&
-              displayResult.vaultContributions.length > 0 && (
-                <View className="mb-4">
-                  <Text
-                    className="text-gray-900 font-outfit-semi-bold mb-3"
-                    style={{
-                      fontSize: scaleFont(16),
-                      lineHeight: scaleLineHeight(scaleFont(16), 1.3),
-                    }}
-                  >
-                    Vault contributions
-                  </Text>
-                  {displayResult.vaultContributions.map((contribution, index) => (
-                    <View
-                      key={`${contribution.vaultId}-${contribution.resourceId}-${index}`}
-                      className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
-                    >
-                      <Text
-                        className="text-gray-900 font-outfit-regular mb-2"
-                        style={{
-                          fontSize: scaleFont(14),
-                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
-                        }}
-                      >
-                        {contribution.answer}
-                      </Text>
-                      <View className="flex-row items-center">
-                        <View className="rounded px-2 py-0.5 bg-indigo-100">
-                          <Text
-                            className="text-xs font-outfit-semi-bold text-indigo-700"
-                            style={{ fontSize: scaleFont(10) }}
-                          >
-                            weight {Math.round((contribution.weight ?? 0) * 100)}%
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-            {/* Metadata - Cleaner */}
-            <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100">
-              <View className="flex-row items-center gap-4">
-                {displayResult.upvotes !== undefined &&
-                  displayResult.upvotes > 0 && (
+              {/* Metadata: upvotes only (no tokens, no rating) */}
+              {displayResult.upvotes !== undefined &&
+                displayResult.upvotes > 0 && (
+                  <View className="flex-row items-center mb-4">
                     <View className="flex-row items-center">
                       <Ionicons name="thumbs-up" size={18} color="#6B7280" />
                       <Text
@@ -927,72 +869,44 @@ export default function Search() {
                         {displayResult.upvotes} upvotes
                       </Text>
                     </View>
-                  )}
-                {displayResult.tokensUsed > 0 && (
-                  <View className="flex-row items-center">
-                    <Ionicons name="flash" size={16} color="#6B7280" />
-                    <Text
-                      className="text-gray-600 font-outfit-regular ml-1"
-                      style={{
-                        fontSize: scaleFont(10),
-                        lineHeight: scaleLineHeight(scaleFont(10), 1.5),
-                      }}
-                    >
-                      {displayResult.tokensUsed} tokens
-                    </Text>
                   </View>
                 )}
-              </View>
-            </View>
 
-            {/* Action Buttons */}
-            <View className="flex-row gap-3">
-              {/* Show upvote button only if:
-                  1. Source is community
-                  2. answerId exists
-                  3. Current user is NOT the answer owner (can't upvote own answer)
-              */}
-              {(() => {
-                const isCommunity = displayResult.source === "community";
-                const hasAnswerId = !!displayResult.answerId;
-                const isNotOwner =
-                  !displayResult.answerUserId ||
-                  displayResult.answerUserId !== user?.id;
-                const shouldShow = isCommunity && hasAnswerId && isNotOwner;
-
-                // Debug logging
-                if (isCommunity) {
-                  console.log("[Upvote Button Debug]", {
-                    source: displayResult.source,
-                    answerId: displayResult.answerId,
-                    answerUserId: displayResult.answerUserId,
-                    currentUserId: user?.id,
-                    isCommunity,
-                    hasAnswerId,
-                    isNotOwner,
-                    shouldShow,
-                    fullSearchResult: JSON.stringify(displayResult, null, 2),
-                  });
-                }
-
-                return shouldShow;
-              })() && (
+              {/* Action Buttons: Resources + Contribute Answer */}
+              <View className="flex-row gap-3">
+                {resourceIds.length > 0 && (
+                  <TouchableOpacity
+                    className="flex-1 rounded-xl py-3.5 items-center shadow-sm bg-gray-200"
+                    onPress={handleOpenResources}
+                    activeOpacity={0.8}
+                    disabled={isFetchingResources}
+                    style={{ opacity: isFetchingResources ? 0.5 : 1 }}
+                  >
+                    <View className="flex-row items-center">
+                      <Ionicons
+                        name="folder-open-outline"
+                        size={20}
+                        color="#374151"
+                      />
+                      <Text
+                        className="text-gray-800 font-outfit-semi-bold ml-2"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                      >
+                        {isFetchingResources ? "Loading..." : "Resources"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  className={`flex-1 rounded-xl py-3.5 items-center shadow-sm ${
-                    isUpvoted ? "bg-green-500" : "bg-purple-500"
-                  }`}
-                  onPress={() => {
-                    upvoteMutation.mutate(displayResult.answerId!);
-                  }}
-                  disabled={upvoteMutation.isPending}
+                  className="flex-1 bg-blue-500 rounded-xl py-3.5 items-center shadow-sm"
+                  onPress={() => setShowSubmitAnswer(true)}
                   activeOpacity={0.8}
                 >
                   <View className="flex-row items-center">
-                    <Ionicons
-                      name={isUpvoted ? "checkmark-circle" : "thumbs-up"}
-                      size={20}
-                      color="#FFFFFF"
-                    />
+                    <Ionicons name="create-outline" size={20} color="#FFFFFF" />
                     <Text
                       className="text-white font-outfit-semi-bold ml-2"
                       style={{
@@ -1000,46 +914,199 @@ export default function Search() {
                         lineHeight: scaleLineHeight(scaleFont(14), 1.4),
                       }}
                     >
-                      {upvoteMutation.isPending
-                        ? "..."
-                        : isUpvoted
-                          ? "Upvoted"
-                          : "Upvote"}
+                      Contribute Answer
                     </Text>
                   </View>
                 </TouchableOpacity>
-              )}
+              </View>
+
+              {/* Help Text */}
+              <View className="mt-4 p-3 bg-blue-50 rounded-xl justify-center gap-2">
+                <Text className="font-outfit-semi-bold text-blue-800 text-base">
+                  💡 Contribute Answer:
+                </Text>
+                <Text className="text-blue-800 text-sm font-outfit-regular pl-5">
+                  Share your knowledge! Your answer can help others and may
+                  appear in future searches.
+                </Text>
+              </View>
+            </View>
+          )}
+
+        {/* Resources Modal */}
+        {showResourcesModal && searchResult && displayResult && (
+          <Modal
+            visible={showResourcesModal}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setShowResourcesModal(false)}
+          >
+            <View className="flex-1 bg-black/50 justify-end">
               <TouchableOpacity
-                className="flex-1 bg-blue-500 rounded-xl py-3.5 items-center shadow-sm"
-                onPress={() => setShowSubmitAnswer(true)}
-                activeOpacity={0.8}
+                className="flex-1"
+                activeOpacity={1}
+                onPress={() => setShowResourcesModal(false)}
+              />
+              <View
+                className="bg-white rounded-t-3xl max-h-[80%]"
+                style={{ paddingBottom: 32 }}
               >
-                <View className="flex-row items-center">
-                  <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
                   <Text
-                    className="text-white font-outfit-semi-bold ml-2"
+                    className="text-gray-900 font-outfit-semi-bold"
                     style={{
-                      fontSize: scaleFont(14),
-                      lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                      fontSize: scaleFont(18),
+                      lineHeight: scaleLineHeight(scaleFont(18), 1.3),
                     }}
                   >
-                    Contribute Answer
+                    Resources
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowResourcesModal(false)}
+                    className="p-2"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="close" size={24} color="#6B7280" />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            </View>
+                <ScrollView className="px-4 pt-2">
+                  {Array.isArray(fetchedResources) && fetchedResources.length > 0 ? (
+                    <View className="mb-4">
+                      {fetchedResources.map((r, idx) => (
+                        <View
+                          key={`${idx}`}
+                          className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-3"
+                        >
+                          <Text
+                            className="text-gray-900 font-outfit-semi-bold"
+                            style={{
+                              fontSize: scaleFont(14),
+                              lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                            }}
+                            numberOfLines={2}
+                          >
+                            {typeof (r as any)?.title === "string"
+                              ? (r as any).title
+                              : "Untitled resource"}
+                          </Text>
 
-            {/* Help Text */}
-            <View className="mt-4 p-3 bg-blue-50 rounded-xl justify-center gap-2">
-              <Text className="font-outfit-semi-bold text-blue-800 text-base">
-                💡 Contribute Answer:
-              </Text>
-              <Text className="text-blue-800 text-sm font-outfit-regular pl-5">
-                Share your knowledge! Your answer can help others and may appear
-                in future searches.
-              </Text>
+                          <View className="flex-row items-center mt-2 flex-wrap">
+                            {typeof (r as any)?.type === "string" &&
+                              (r as any).type.length > 0 && (
+                                <View className="rounded px-2 py-0.5 mr-2 mb-2 bg-blue-100">
+                                  <Text
+                                    className="text-xs font-outfit-semi-bold text-blue-700 uppercase"
+                                    style={{ fontSize: scaleFont(10) }}
+                                  >
+                                    {(r as any).type}
+                                  </Text>
+                                </View>
+                              )}
+
+                            {typeof (r as any)?.subject === "string" &&
+                              (r as any).subject.length > 0 && (
+                                <View className="rounded px-2 py-0.5 mr-2 mb-2 bg-gray-200">
+                                  <Text
+                                    className="text-xs font-outfit-semi-bold text-gray-700"
+                                    style={{ fontSize: scaleFont(10) }}
+                                  >
+                                    {(r as any).subject}
+                                  </Text>
+                                </View>
+                              )}
+                          </View>
+
+                          {Array.isArray((r as any)?.tags) &&
+                            (r as any).tags.length > 0 && (
+                              <View className="flex-row flex-wrap mt-1">
+                                {(r as any).tags
+                                  .filter(
+                                    (t: any) =>
+                                      typeof t === "string" &&
+                                      t.trim().length > 0,
+                                  )
+                                  .slice(0, 12)
+                                  .map((tag: string, tIdx: number) => (
+                                    <View
+                                      key={`${idx}-tag-${tIdx}`}
+                                      className="rounded-full px-2 py-1 bg-indigo-100 mr-2 mb-2"
+                                    >
+                                      <Text
+                                        className="text-xs font-outfit-semi-bold text-indigo-700"
+                                        style={{ fontSize: scaleFont(10) }}
+                                      >
+                                        {tag}
+                                      </Text>
+                                    </View>
+                                  ))}
+                              </View>
+                            )}
+
+                          {typeof (r as any)?.fileUrl === "string" &&
+                            (r as any).fileUrl.length > 0 && (
+                              <TouchableOpacity
+                                className="bg-blue-500 rounded-lg px-3 py-2 mt-3 self-start"
+                                onPress={async () => {
+                                  try {
+                                    const url = (r as any).fileUrl as string;
+                                    const { Linking } = await import("react-native");
+                                    const can = await Linking.canOpenURL(url);
+                                    if (!can) {
+                                      showErrorToast(
+                                        "Error",
+                                        "Cannot open this resource link",
+                                      );
+                                      return;
+                                    }
+                                    await Linking.openURL(url);
+                                  } catch (e: any) {
+                                    showErrorToast(
+                                      "Error",
+                                      e?.message || "Failed to open resource",
+                                    );
+                                  }
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text
+                                  className="text-white font-outfit-semi-bold"
+                                  style={{
+                                    fontSize: scaleFont(12),
+                                    lineHeight: scaleLineHeight(
+                                      scaleFont(12),
+                                      1.4,
+                                    ),
+                                  }}
+                                >
+                                  Open Resource
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View className="py-8 items-center">
+                      <Ionicons
+                        name="folder-open-outline"
+                        size={48}
+                        color="#9CA3AF"
+                      />
+                      <Text
+                        className="text-gray-500 font-outfit-regular mt-3 text-center"
+                        style={{
+                          fontSize: scaleFont(14),
+                          lineHeight: scaleLineHeight(scaleFont(14), 1.4),
+                        }}
+                      >
+                        No resources for this answer
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
             </View>
-          </View>
+          </Modal>
         )}
 
         {/* Show subscription required message */}

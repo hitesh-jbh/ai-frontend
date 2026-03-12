@@ -1,26 +1,24 @@
+import { Ionicons } from "@expo/vector-icons";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
+import { useForm } from "react-hook-form";
 import {
-  View,
-  Text,
   ScrollView,
+  Text,
   TouchableOpacity,
-  Alert,
-  TextInput,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { ControlledInput } from "../../components/ui/Input";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ionicons } from "@expo/vector-icons";
-import { showSuccessToast, showErrorToast, showInfoToast } from "../../utils/toast";
-import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 const addResourceSchema = z
   .object({
@@ -84,69 +82,83 @@ export default function AddResource() {
 
   const resourceType = watch("type");
 
-  const pickFile = async () => {
+  // Pick file from document picker
+  const pickDocument = async () => {
     try {
-      if (resourceType === "video") {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["videos"],
-          allowsEditing: true,
-          quality: 0.8,
-        });
-
-        if (!result.canceled && result.assets[0]) {
-          setFileUri(result.assets[0].uri);
-        }
-      } else if (resourceType === "pdf") {
-        // Use document picker for PDFs
-        const result = await DocumentPicker.getDocumentAsync({
-          type: "application/pdf",
-          copyToCacheDirectory: true,
-        });
-
-        if (!result.canceled) {
-          // expo-document-picker returns result with assets array
-          if (result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            if (asset.uri) {
-              setFileUri(asset.uri);
-              showSuccessToast("Success", `PDF selected: ${asset.name || "file"}`);
-            } else {
-              showErrorToast("Error", "File URI not found");
-            }
-          } else {
-            showErrorToast("Error", "No file selected");
-          }
-        }
+      let mimeTypes: string[] = [];
+      if (resourceType === "pdf") {
+        mimeTypes = ["application/pdf"];
       } else if (resourceType === "note") {
-        // Use document picker for notes (allow various document types)
-        const result = await DocumentPicker.getDocumentAsync({
-          type: [
-            "application/pdf",
-            "text/plain",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          ],
-          copyToCacheDirectory: true,
-        });
+        mimeTypes = [
+          "application/pdf",
+          "text/plain",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.oasis.opendocument.text",
+        ];
+      } else {
+        return;
+      }
 
-        if (!result.canceled) {
-          // expo-document-picker returns result with assets array
-          if (result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            if (asset.uri) {
-              setFileUri(asset.uri);
-              showSuccessToast("Success", `File selected: ${asset.name || "file"}`);
-            } else {
-              showErrorToast("Error", "File URI not found");
-            }
+      const result = await DocumentPicker.getDocumentAsync({
+        type: mimeTypes,
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled) {
+        if (result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          if (asset.uri) {
+            setFileUri(asset.uri);
+            showSuccessToast("Success", `File selected: ${asset.name || "file"}`);
           } else {
-            showErrorToast("Error", "No file selected");
+            showErrorToast("Error", "File URI not found");
           }
+        } else {
+          showErrorToast("Error", "No file selected");
         }
       }
     } catch (error: any) {
-      console.error("Error picking file:", error);
-      showErrorToast("Error", error?.message || "Failed to pick file");
+      console.error("Error picking document:", error);
+      showErrorToast("Error", error?.message || "Failed to pick document");
+    }
+  };
+
+  // Pick image from gallery (for note type)
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setFileUri(result.assets[0].uri);
+        showSuccessToast("Success", "Image selected");
+      }
+    } catch (error: any) {
+      console.error("Error picking image:", error);
+      showErrorToast("Error", error?.message || "Failed to pick image");
+    }
+  };
+
+  // Pick video from gallery (for video type)
+  const pickVideo = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setFileUri(result.assets[0].uri);
+        showSuccessToast("Success", "Video selected");
+      }
+    } catch (error: any) {
+      console.error("Error picking video:", error);
+      showErrorToast("Error", error?.message || "Failed to pick video");
     }
   };
 
@@ -154,8 +166,6 @@ export default function AddResource() {
     mutationFn: async (data: AddResourceForm) => {
       let fileUrl = data.fileUrl;
 
-      // For file uploads, we need to create the resource first, then upload the file
-      // The upload endpoint requires resourceId, so we create first
       const createData: any = {
         vaultId: vaultId!,
         type: data.type,
@@ -173,15 +183,12 @@ export default function AddResource() {
           .filter((tag) => tag.length > 0);
       }
 
-      // For link type, fileUrl is required and should be provided
       if (data.type === "link" && fileUrl) {
         createData.fileUrl = fileUrl;
       }
 
-      // Create resource first (without fileUrl for file uploads)
       const createdResource = await resource.createResource(createData);
 
-      // If we have a local file to upload, upload it now
       if (fileUri && fileUri.startsWith("file://") && data.type !== "link") {
         try {
           fileUrl = await resource.uploadFile(
@@ -191,27 +198,23 @@ export default function AddResource() {
             createdResource.id
           );
         } catch (error) {
-          // Continue even if file upload fails - resource is already created
+          // Continue even if file upload fails
         }
       }
 
-      // Return the created resource (fileUrl will be updated by the upload endpoint)
       return createdResource;
     },
     onSuccess: (_, variables) => {
-      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ["resources"] });
       queryClient.invalidateQueries({ queryKey: ["allResources"] });
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
       
-      // Invalidate vault-specific queries
       if (vaultId) {
         queryClient.invalidateQueries({ queryKey: ["vaultResources", vaultId] });
         queryClient.invalidateQueries({ queryKey: ["vault", vaultId] });
       }
       
-      // Invalidate leaderboard and analytics queries
       queryClient.invalidateQueries({ queryKey: ["topEarners"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["userRank"] });
@@ -244,57 +247,212 @@ export default function AddResource() {
     { value: "link" as const, label: "Link", icon: "link" },
   ];
 
+  // Helper to render input section with minimal label
+  const renderInputSection = (
+    name: keyof AddResourceForm,
+    label: string,
+    placeholder: string,
+    options?: {
+      multiline?: boolean;
+      numberOfLines?: number;
+      keyboardType?: "default" | "email-address" | "phone-pad" | "url";
+      autoCapitalize?: "none" | "sentences" | "words" | "characters";
+      required?: boolean;
+    }
+  ) => (
+    <View className="mb-5">
+      <View className="flex-row items-center mb-1">
+        <Text className="text-xs font-outfit-medium text-gray-500 uppercase tracking-wider">
+          {label}
+        </Text>
+        {options?.required && <Text className="text-red-500 text-xs ml-1">*</Text>}
+      </View>
+      <ControlledInput
+        control={control}
+        name={name}
+        label=""
+        placeholder={placeholder}
+        multiline={options?.multiline}
+        numberOfLines={options?.numberOfLines}
+        keyboardType={options?.keyboardType || "default"}
+        autoCapitalize={options?.autoCapitalize}
+        style={options?.multiline ? { minHeight: 100, textAlignVertical: "top" } : {}}
+        className="border border-gray-300 rounded-lg px-4 py-3 bg-white"
+      />
+      {errors[name] && (
+        <Text className="text-red-500 text-xs font-outfit-regular mt-1">
+          {errors[name]?.message}
+        </Text>
+      )}
+    </View>
+  );
+
+  const renderFilePicker = () => {
+    if (resourceType === "link") return null;
+
+    if (resourceType === "video") {
+      return (
+        <TouchableOpacity
+          onPress={pickVideo}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-6 items-center bg-gray-50"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="videocam" size={32} color="#6B7280" />
+          <Text className="text-gray-600 text-sm font-outfit-regular mt-2">
+            {fileUri ? "Video selected" : "Tap to select video"}
+          </Text>
+          {fileUri && (
+            <View className="bg-blue-50 rounded-lg px-3 py-1 mt-2">
+              <Text
+                className="text-blue-700 text-xs font-outfit-regular"
+                numberOfLines={1}
+              >
+                {fileUri.split("/").pop()}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (resourceType === "pdf") {
+      return (
+        <TouchableOpacity
+          onPress={pickDocument}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-6 items-center bg-gray-50"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="document-text" size={32} color="#6B7280" />
+          <Text className="text-gray-600 text-sm font-outfit-regular mt-2">
+            {fileUri ? "PDF selected" : "Tap to select PDF"}
+          </Text>
+          {fileUri && (
+            <View className="bg-blue-50 rounded-lg px-3 py-1 mt-2">
+              <Text
+                className="text-blue-700 text-xs font-outfit-regular"
+                numberOfLines={1}
+              >
+                {fileUri.split("/").pop()}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (resourceType === "note") {
+      return (
+        <View className="space-y-3">
+          <TouchableOpacity
+            onPress={pickDocument}
+            className="border-2 border-dashed border-gray-300 rounded-xl p-6 items-center bg-gray-50"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="document" size={32} color="#6B7280" />
+            <Text className="text-gray-600 text-sm font-outfit-regular mt-2">
+              Select Document (PDF, Word, Text)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={pickImage}
+            className="border-2 border-dashed border-gray-300 rounded-xl p-6 items-center bg-gray-50"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="image" size={32} color="#6B7280" />
+            <Text className="text-gray-600 text-sm font-outfit-regular mt-2">
+              Select Image from Gallery
+            </Text>
+          </TouchableOpacity>
+
+          {fileUri && (
+            <View className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <Text className="text-blue-700 text-sm font-outfit-regular" numberOfLines={1}>
+                Selected: {fileUri.split("/").pop()}
+              </Text>
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader title="Add Resource" showBackButton />
+      
+      {/* Vault context */}
       {vaultData && (
-        <View className="px-6 pb-4">
-          <Text className="text-gray-600 text-sm font-outfit-regular">
-            Adding to: {vaultData.title}
-          </Text>
+        <View className="px-6 pb-2">
+          <View className="bg-gray-100 rounded-lg px-4 py-2 flex-row items-center">
+            <Ionicons name="folder" size={16} color="#6B7280" />
+            <Text className="text-gray-600 text-sm font-outfit-regular ml-2">
+              Adding to: {vaultData.title}
+            </Text>
+          </View>
         </View>
       )}
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="px-6 pb-6">
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 30 }}
+      >
+        {/* Header with icon */}
+        <View className="items-center mt-4 mb-6">
+          <View className="bg-blue-50 p-4 rounded-full">
+            <Ionicons name="cloud-upload" size={28} color="#3B82F6" />
+          </View>
+          <Text className="text-lg font-outfit-semibold text-gray-800 mt-3">
+            New Resource
+          </Text>
+          <Text className="text-xs font-outfit-regular text-gray-400">
+            Add content to your vault
+          </Text>
+        </View>
+
+        <View className="px-6">
           {/* Resource Type Selection */}
           <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-3">
+            <Text className="text-xs font-outfit-medium text-gray-500 uppercase tracking-wider mb-3">
               Resource Type <Text className="text-red-500">*</Text>
             </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {resourceTypes.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  onPress={() => {
-                    setSelectedType(type.value);
-                    setValue("type", type.value);
-                    setFileUri(undefined);
-                    setValue("fileUrl", "");
-                  }}
-                  className={`px-4 py-3 rounded-lg border-2 flex-row items-center ${
-                    resourceType === type.value
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 bg-white"
-                  }`}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={type.icon as any}
-                    size={20}
-                    color={resourceType === type.value ? "#3B82F6" : "#6B7280"}
-                  />
-                  <Text
-                    className={`ml-2 text-sm font-outfit-semi-bold ${
-                      resourceType === type.value
-                        ? "text-blue-700"
-                        : "text-gray-700"
+            <View className="flex-row flex-wrap gap-3">
+              {resourceTypes.map((type) => {
+                const isActive = resourceType === type.value;
+                return (
+                  <TouchableOpacity
+                    key={type.value}
+                    onPress={() => {
+                      setSelectedType(type.value);
+                      setValue("type", type.value);
+                      setFileUri(undefined);
+                      setValue("fileUrl", "");
+                    }}
+                    className={`flex-1 min-w-[80px] py-4 rounded-xl border-2 items-center ${
+                      isActive
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 bg-white"
                     }`}
+                    activeOpacity={0.7}
                   >
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Ionicons
+                      name={type.icon as any}
+                      size={24}
+                      color={isActive ? "#3B82F6" : "#6B7280"}
+                    />
+                    <Text
+                      className={`mt-1 text-xs font-outfit-medium ${
+                        isActive ? "text-blue-700" : "text-gray-600"
+                      }`}
+                    >
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             {errors.type && (
               <Text className="text-red-500 text-xs font-outfit-regular mt-1">
@@ -304,156 +462,62 @@ export default function AddResource() {
           </View>
 
           {/* Title Field */}
+          {renderInputSection("title", "TITLE", "Enter resource title", { required: true })}
+
+          {/* File Upload Section */}
           <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Title <Text className="text-red-500">*</Text>
-            </Text>
-            <ControlledInput
-              control={control}
-              name="title"
-              label=""
-              placeholder="Enter resource title"
-            />
-            {errors.title && (
-              <Text className="text-red-500 text-xs font-outfit-regular mt-1">
-                {errors.title.message}
+            <View className="flex-row items-center mb-2">
+              <Text className="text-xs font-outfit-medium text-gray-500 uppercase tracking-wider">
+                {resourceType === "link" ? "URL" : "FILE"}
               </Text>
+              {resourceType !== "link" && <Text className="text-red-500 text-xs ml-1">*</Text>}
+            </View>
+            {resourceType === "link" ? (
+              <>
+                <ControlledInput
+                  control={control}
+                  name="fileUrl"
+                  label=""
+                  placeholder="https://example.com"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  className="border border-gray-300 rounded-lg px-4 py-3 bg-white"
+                />
+                {errors.fileUrl && (
+                  <Text className="text-red-500 text-xs font-outfit-regular mt-1">
+                    {errors.fileUrl.message}
+                  </Text>
+                )}
+              </>
+            ) : (
+              renderFilePicker()
             )}
           </View>
 
-          {/* File Upload or URL */}
-          {resourceType !== "link" && (
-            <View className="mb-6">
-              <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-                File
-              </Text>
-              <TouchableOpacity
-                onPress={pickFile}
-                className="bg-gray-100 rounded-lg p-4 border-2 border-dashed border-gray-300"
-                activeOpacity={0.7}
-              >
-                <View className="items-center">
-                  <Ionicons
-                    name={
-                      resourceType === "video"
-                        ? "videocam"
-                        : resourceType === "pdf"
-                          ? "document-text"
-                          : "document"
-                    }
-                    size={32}
-                    color="#6B7280"
-                  />
-                  <Text className="text-gray-600 text-sm font-outfit-regular mt-2">
-                    {fileUri ? "File selected" : "Tap to select file"}
-                  </Text>
-                  {fileUri && (
-                    <Text
-                      className="text-gray-500 text-xs font-outfit-regular mt-1"
-                      numberOfLines={1}
-                    >
-                      {fileUri.split("/").pop()}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {resourceType === "link" && (
-            <View className="mb-6">
-              <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-                URL <Text className="text-red-500">*</Text>
-              </Text>
-              <ControlledInput
-                control={control}
-                name="fileUrl"
-                label=""
-                placeholder="https://example.com"
-                keyboardType="url"
-                autoCapitalize="none"
-              />
-              {errors.fileUrl && (
-                <Text className="text-red-500 text-xs font-outfit-regular mt-1">
-                  {errors.fileUrl.message}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Subject */}
-          <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Subject
+          {/* Optional Fields - grouped in a card */}
+          <View className="bg-gray-50 rounded-xl p-5 mb-6 border border-gray-200">
+            <Text className="text-sm font-outfit-semibold text-gray-700 mb-4">
+              Additional Information (Optional)
             </Text>
-            <ControlledInput
-              control={control}
-              name="subject"
-              label=""
-              placeholder="e.g., Mathematics"
-            />
-          </View>
-
-          {/* Grade */}
-          <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Grade
-            </Text>
-            <ControlledInput
-              control={control}
-              name="grade"
-              label=""
-              placeholder="e.g., Grade 10"
-            />
-          </View>
-
-          {/* Area */}
-          <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Area
-            </Text>
-            <ControlledInput
-              control={control}
-              name="area"
-              label=""
-              placeholder="e.g., Algebra"
-            />
-          </View>
-
-          {/* Language */}
-          <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Language
-            </Text>
-            <ControlledInput
-              control={control}
-              name="language"
-              label=""
-              placeholder="e.g., English"
-            />
-          </View>
-
-          {/* Tags */}
-          <View className="mb-6">
-            <Text className="text-gray-900 text-sm font-outfit-semi-bold mb-2">
-              Tags (comma separated)
-            </Text>
-            <ControlledInput
-              control={control}
-              name="tags"
-              label=""
-              placeholder="tag1, tag2, tag3"
-            />
+            
+            {renderInputSection("subject", "SUBJECT", "e.g., Mathematics")}
+            {renderInputSection("grade", "GRADE", "e.g., Grade 10")}
+            {renderInputSection("area", "AREA", "e.g., Algebra")}
+            {renderInputSection("language", "LANGUAGE", "e.g., English")}
+            {renderInputSection("tags", "TAGS", "comma separated", {
+              autoCapitalize: "none",
+            })}
           </View>
 
           {/* Action Buttons */}
-          <View className="gap-3">
+          <View className="gap-3 mt-4">
             <Button
               title="Create Resource"
               onPress={handleSubmit(onSubmit)}
               loading={
                 isSubmitting || createResourceMutation.isPending || isUploading
               }
+              className="bg-blue-600 rounded-lg py-4"
             />
             <Button
               title="Cancel"
@@ -462,6 +526,8 @@ export default function AddResource() {
               disabled={
                 isSubmitting || createResourceMutation.isPending || isUploading
               }
+              className="border border-gray-300 rounded-lg py-4"
+              textClassName="text-gray-700"
             />
           </View>
         </View>

@@ -1,30 +1,30 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
-import { Image } from "expo-image";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { ResponsiveText } from "@/utils/responsive-text";
+import { Ionicons } from "@expo/vector-icons";
 import {
   useInfiniteQuery,
   useMutation,
-  useQueryClient,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { Vault } from "../../services/vault.service";
 import { useAuthStore } from "../../store/auth-store";
-import { ScreenHeader } from "../../components/ui/ScreenHeader";
-import { Ionicons } from "@expo/vector-icons";
 import { normalizeImageUrl } from "../../utils/imageUrl";
-import { showSuccessToast, showErrorToast } from "../../utils/toast";
-import { ResponsiveText } from "@/utils/responsive-text";
+import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
 interface VaultCardProps {
   vault: Vault;
@@ -437,88 +437,124 @@ export default function Vaults() {
       </View>
 
       {activeTab === "my" && (
-      <View className="px-6">
-        {/* Profile Section */}
-        <View className="items-center mb-6">
-          <View
-            className="bg-gray-200 rounded-full items-center justify-center mb-2 overflow-hidden"
-            style={{ width: 120, height: 120 }}
-          >
-            {normalizedProfilePicture && !profileImageError ? (
-              <Image
-                key={normalizedProfilePicture}
-                source={{ uri: normalizedProfilePicture }}
-                style={{ width: 120, height: 120 }}
-                contentFit="cover"
-                transition={200}
-                onError={(e) => {
-                  console.error(
-                    "Failed to load profile picture in Vaults:",
-                    normalizedProfilePicture,
-                    e
-                  );
-                  setProfileImageError(true);
-                }}
-                onLoad={() => {
-                  console.log(
-                    "Profile picture loaded in Vaults:",
-                    normalizedProfilePicture
-                  );
-                  setProfileImageError(false);
-                }}
-              />
-            ) : displayUser?.name ? (
-              <Text
-                className={`text-gray-600 font-outfit-bold ${ResponsiveText.display}`}
+        <View className="px-6">
+          {/* Profile Card - Enhanced Design */}
+          <View className="bg-white rounded-2xl p-5 mb-6 border border-gray-100 shadow-sm">
+            {/* Avatar & Basic Info Row */}
+            <View className="flex-row items-center mb-4">
+              <View
+                className="bg-gray-200 rounded-full items-center justify-center overflow-hidden mr-4"
+                style={{ width: 80, height: 80 }}
               >
-                {displayUser.name.charAt(0).toUpperCase()}
-              </Text>
-            ) : (
-              <Ionicons name="person" size={60} color="#6B7280" />
+                {normalizedProfilePicture && !profileImageError ? (
+                  <Image
+                    key={normalizedProfilePicture}
+                    source={{ uri: normalizedProfilePicture }}
+                    style={{ width: 80, height: 80 }}
+                    contentFit="cover"
+                    transition={200}
+                    onError={() => {
+                      console.error(
+                        "Failed to load profile picture in Vaults:",
+                        normalizedProfilePicture
+                      );
+                      setProfileImageError(true);
+                    }}
+                    onLoad={() => setProfileImageError(false)}
+                  />
+                ) : displayUser?.name ? (
+                  <Text
+                    className={`text-gray-600 font-outfit-bold ${ResponsiveText.display}`}
+                  >
+                    {displayUser.name.charAt(0).toUpperCase()}
+                  </Text>
+                ) : (
+                  <Ionicons name="person" size={40} color="#6B7280" />
+                )}
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-900 text-xl font-outfit-bold uppercase">
+                  {displayUser?.name || "User"}
+                </Text>
+                {/* Title - New Field */}
+                {displayUser?.title && (
+                  <Text className="text-blue-600 text-sm font-outfit-semi-bold mt-1">
+                    {displayUser.title}
+                  </Text>
+                )}
+                {/* Bio (Description) */}
+                {displayUser?.bio && (
+                  <Text
+                    className="text-gray-600 text-sm font-outfit-regular mt-1"
+                    numberOfLines={2}
+                  >
+                    {displayUser.bio}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Summary - New Field */}
+            {displayUser?.summary && (
+              <View className="flex-row items-start mb-3 bg-blue-50 p-3 rounded-xl">
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color="#3B82F6"
+                  style={{ marginRight: 8, marginTop: 2 }}
+                />
+                <Text className="text-gray-700 text-sm font-outfit-regular flex-1">
+                  {displayUser.summary}
+                </Text>
+              </View>
             )}
-          </View>
-          <Text className="text-gray-900 text-xl font-outfit-bold uppercase mb-1 mt-2">
-            {displayUser?.name || "User"}
-          </Text>
-          {displayUser?.bio && (
-            <Text className="text-gray-600 text-sm font-outfit-regular mt-2 text-center">
-              {displayUser.bio}
-            </Text>
-          )}
-        </View>
 
-        {/* Statistics */}
-        <View className="flex-row gap-4 mb-6">
-          <View className="flex-1 bg-white rounded-lg p-4 items-center border border-gray-100">
-            <Text className="text-gray-900 text-2xl font-outfit-bold mb-1">
-              {vaults?.length}
-            </Text>
-            <Text className="text-gray-600 text-xs font-outfit-regular">
-              Vaults
-            </Text>
-          </View>
-          <View className="flex-1 bg-white rounded-lg p-4 items-center border border-gray-100">
-            <Text className="text-gray-900 text-2xl font-outfit-bold mb-1">
-              {Object.values(resourceCounts || {}).reduce((a, b) => a + b, 0)}
-            </Text>
-            <Text className="text-gray-600 text-xs font-outfit-regular">
-              Resources
-            </Text>
-          </View>
-        </View>
+            {/* Phone Number - New Field */}
+            {displayUser?.phone && (
+              <View className="flex-row items-center mb-4">
+                <Ionicons name="call-outline" size={18} color="#6B7280" />
+                <Text className="text-gray-600 text-sm font-outfit-regular ml-2">
+                  {displayUser.phone}
+                </Text>
+              </View>
+            )}
 
-        {/* Action Button */}
-        <TouchableOpacity
-          onPress={() => router.push("/(tabs)/create-vault")}
-          className="bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center mb-6"
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text className="text-white text-sm font-outfit-semi-bold ml-2">
-            Create Vault
-          </Text>
-        </TouchableOpacity>
-      </View>
+            {/* Statistics Row */}
+            <View className="flex-row gap-4 mt-2">
+              <View className="flex-1 bg-gray-50 rounded-xl p-3 items-center">
+                <Text className="text-gray-900 text-2xl font-outfit-bold">
+                  {vaults?.length}
+                </Text>
+                <Text className="text-gray-600 text-xs font-outfit-regular">
+                  Vaults
+                </Text>
+              </View>
+              <View className="flex-1 bg-gray-50 rounded-xl p-3 items-center">
+                <Text className="text-gray-900 text-2xl font-outfit-bold">
+                  {Object.values(resourceCounts || {}).reduce(
+                    (a, b) => a + b,
+                    0
+                  )}
+                </Text>
+                <Text className="text-gray-600 text-xs font-outfit-regular">
+                  Resources
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Create Vault Button */}
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/create-vault")}
+            className="bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center mb-6"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text className="text-white text-sm font-outfit-semi-bold ml-2">
+              Create Vault
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {activeTab === "my" ? (

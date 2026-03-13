@@ -156,7 +156,7 @@ export default function Home() {
         {/* Trending Banner */}
         <TrendingBanner
           trendingText=""
-          onCreateVault={() => router.push("/(tabs)/vaults")}
+          onCreateVault={() => router.push("/(tabs)/create-vault")}
           onStartEarning={() => router.push("/(tabs)/vaults")}
           onTutorials={() => router.push("/(tabs)/search")}
         />

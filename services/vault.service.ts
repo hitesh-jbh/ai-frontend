@@ -3,6 +3,9 @@ import { AxiosInstance } from "axios";
 export interface CreateVaultRequest {
   title: string;
   description?: string;
+  summary?: string;
+  mobileNumber?: string;
+  email?: string;
 }
 
 export interface UpdateVaultRequest {

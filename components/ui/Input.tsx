@@ -1,8 +1,7 @@
-import React from "react";
-import { TextInput, Text, View, TextInputProps } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Control, Controller, FieldPath, FieldValues } from "react-hook-form";
 import { getFontSizeAndLineHeight } from "@/utils/font-scale";
+import React from "react";
+import { Control, Controller, FieldPath, FieldValues } from "react-hook-form";
+import { Text, TextInput, TextInputProps, View } from "react-native";
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -14,6 +13,9 @@ export const Input: React.FC<InputProps> = ({
   label,
   error,
   rightIcon,
+  multiline,
+  numberOfLines,
+  style,
   ...props
 }) => {
   return (
@@ -25,6 +27,10 @@ export const Input: React.FC<InputProps> = ({
       )}
       <View className="relative">
         <TextInput
+          {...props}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          style={style}
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="off"
@@ -32,7 +38,6 @@ export const Input: React.FC<InputProps> = ({
             error ? "border border-red-500" : ""
           } ${rightIcon ? "pr-12" : ""}`}
           placeholderTextColor="#9CA3AF"
-          {...props}
         />
         {rightIcon && (
           <View className="absolute right-4 top-0 bottom-0 justify-center">
@@ -61,6 +66,7 @@ export function ControlledInput<T extends FieldValues>({
   control,
   label,
   required = false,
+  style,
   ...props
 }: ControlledInputProps<T>) {
   return (
@@ -91,7 +97,7 @@ export function ControlledInput<T extends FieldValues>({
             onBlur={onBlur}
             onChangeText={onChange}
             error={error?.message}
-            style={getFontSizeAndLineHeight("base")}
+            style={[getFontSizeAndLineHeight("base"), style]}
           />
         </>
       )}

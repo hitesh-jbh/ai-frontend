@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import React from "react";
 import { useForm } from "react-hook-form";
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
@@ -13,8 +13,7 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { showErrorToast, showSuccessToast } from "../../utils/toast";
 
-// Same schema as CreateVault
-const editVaultSchema = z.object({
+const createVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(1000).optional(),
   summary: z.string().max(500).optional(),
@@ -22,27 +21,18 @@ const editVaultSchema = z.object({
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
 });
 
-type EditVaultForm = z.infer<typeof editVaultSchema>;
+type CreateVaultForm = z.infer<typeof createVaultSchema>;
 
-export default function EditVault() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function CreateVault() {
   const queryClient = useQueryClient();
   const { vault } = useServices();
-
-  // Fetch existing vault data
-  const { data: vaultData, isLoading: isLoadingVault } = useQuery({
-    queryKey: ["vault", id],
-    queryFn: () => vault.getVault(id!),
-    enabled: !!id,
-  });
 
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-    reset,
-  } = useForm<EditVaultForm>({
-    resolver: zodResolver(editVaultSchema),
+  } = useForm<CreateVaultForm>({
+    resolver: zodResolver(createVaultSchema),
     defaultValues: {
       title: "",
       description: "",
@@ -52,71 +42,39 @@ export default function EditVault() {
     },
   });
 
-  // Populate form when data is loaded
-  React.useEffect(() => {
-    if (vaultData) {
-      reset({
-        title: vaultData.title,
-        description: vaultData.description || "",
-        summary: vaultData.summary || "",
-        phone: vaultData.phone || "",
-        email: vaultData.email || "",
-      });
-    }
-  }, [vaultData, reset]);
-
-  const editVaultMutation = useMutation({
-    mutationFn: (data: EditVaultForm) => {
-      // 👇 Log the payload to see what's being sent
-      console.log("Edit payload:", data);
-
-      // 👇 Map fields to match your backend expectations.
-      // If your API expects, for example, 'phone_number' and 'email_address', use this:
-      const payload = {
+  const createVaultMutation = useMutation({
+    mutationFn: (data: CreateVaultForm) => {
+      return vault.createVault({
         title: data.title,
         description: data.description,
-        summary: data.summary,                // keep as is or remove if not updatable
-        phone_number: data.phone,              // change key if needed
-        email_address: data.email,              // change key if needed
-      };
-
-      // If the backend does NOT allow updating summary, phone, or email, remove them from payload.
-      // Example: only title and description are updatable
-      // const payload = {
-      //   title: data.title,
-      //   description: data.description,
-      // };
-
-      return vault.updateVault(id!, payload);
+        summary: data.summary,
+        mobileNumber: data.phone,
+        email: data.email,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
-      queryClient.invalidateQueries({ queryKey: ["vault", id] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
-      showSuccessToast("Success", "Vault updated successfully");
+      showSuccessToast("Success", "Vault created successfully");
       router.back();
     },
     onError: (error: any) => {
-      console.error("Vault update error:", error);
-      // Log the full error response to see field-specific issues
-      if (error?.response) {
-        console.log("Error response data:", error.response.data);
-      }
+      console.error("Vault creation error:", error);
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to update vault. Please try again.";
+        "Failed to create vault. Please try again.";
       showErrorToast("Error", errorMessage);
     },
   });
 
-  const onSubmit = async (data: EditVaultForm) => {
-    editVaultMutation.mutate(data);
+  const onSubmit = async (data: CreateVaultForm) => {
+    createVaultMutation.mutate(data);
   };
 
   // Helper for single-line inputs
   const renderInputSection = (
-    name: keyof EditVaultForm,
+    name: keyof CreateVaultForm,
     label: string,
     placeholder: string,
     options?: {
@@ -145,18 +103,10 @@ export default function EditVault() {
     </View>
   );
 
-  if (isLoadingVault) {
-    return (
-      <SafeAreaView className="flex-1 bg-white justify-center items-center">
-        <Text>Loading vault...</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader
-        title="Edit Vault"
+        title="Create Vault"
         showBackButton
         onBackPress={() => router.back()}
       />
@@ -175,13 +125,13 @@ export default function EditVault() {
           {/* Header */}
           <View className="items-center mt-4 mb-8">
             <View className="bg-blue-50 p-4 rounded-full">
-              <Ionicons name="folder-open" size={28} color="#3B82F6" />
+              <Ionicons name="add-circle" size={28} color="#3B82F6" />
             </View>
             <Text className="text-lg font-outfit-semibold text-gray-800 mt-3">
-              Edit Vault
+              Create Vault
             </Text>
             <Text className="text-xs font-outfit-regular text-gray-400">
-              Update your vault details
+              Create a new vault
             </Text>
           </View>
 
@@ -246,12 +196,12 @@ export default function EditVault() {
               autoCapitalize: "none",
             })}
 
-            {/* Update Button */}
+            {/* Create Button */}
             <View className="mt-8">
               <Button
-                title="Update Vault"
+                title="Create Vault"
                 onPress={handleSubmit(onSubmit)}
-                loading={isSubmitting || editVaultMutation.isPending}
+                loading={isSubmitting || createVaultMutation.isPending}
                 className="bg-blue-600 rounded-lg py-4"
               />
             </View>

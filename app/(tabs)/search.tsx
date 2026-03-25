@@ -53,9 +53,10 @@ export default function Search() {
   );
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [aiPreference] = useState<"short" | "medium" | "deep_search">("medium");
+  const [aiPreference, setAiPreference] = useState<"short" | "medium" | "deep_search">("medium");
   const [showThreadsModal, setShowThreadsModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showPreferenceMenu, setShowPreferenceMenu] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [resourceType, setResourceType] = useState<"link" | "pdf" | "video">(
     "link",
@@ -72,6 +73,7 @@ export default function Search() {
   const [fetchedResources, setFetchedResources] = useState<any[] | null>(null);
   const [isFetchingResources, setIsFetchingResources] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
+  const threeDotsRef = useRef<View>(null);
 
   // State for follow/save of the main vault
   const [isFollowed, setIsFollowed] = useState(false);
@@ -257,7 +259,7 @@ export default function Search() {
     error,
     refetch,
   } = useQuery<SearchResult, Error>({
-    queryKey: ["search", activeQuery, threadId],
+    queryKey: ["search", activeQuery, threadId, aiPreference],
     queryFn: async () => {
       if (!activeQuery || !threadId)
         throw new Error("Query and threadId are required");
@@ -505,7 +507,7 @@ export default function Search() {
       return;
     }
 
-    // ✅ NEW: if threadId exists → go to chat screen
+    // if threadId exists → go to chat screen
     if (historyItem.threadId) {
       router.push({
         pathname: "/(tabs)/chat",
@@ -515,7 +517,6 @@ export default function Search() {
       return;
     }
 
-    // 🔽 fallback (your existing logic)
     setSearchQuery(trimmedQuery);
 
     const isFreePlan = currentStatus.subscription?.plan === "free";
@@ -646,7 +647,7 @@ export default function Search() {
         onBackPress={handleBackPress}
         rightElement={
           <View className="flex-row items-center gap-3">
-            {/* NEW: Chat icon - navigates to Chat screen */}
+            {/* Chat icon - navigates to Chat screen */}
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/chat")}
               className="w-10 h-10 rounded-full items-center justify-center"
@@ -664,32 +665,70 @@ export default function Search() {
               <Ionicons name="time-outline" size={22} color="#3B82F6" />
             </TouchableOpacity>
 
-            {/* Plus icon - creates a new thread (resets current thread) */}
-            <TouchableOpacity
-              onPress={() => {
-                setThreadId(null);
-                setSearchTrigger(null);
-                setSearchQuery("");
-                setDebouncedQuery("");
-              }}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add" size={24} color="#3B82F6" />
-            </TouchableOpacity>
-
-            {/* Three dots - threads modal (existing) */}
+            {/* NEW: Threads icon - chatbubbles-outline (opens threads modal) */}
             <TouchableOpacity
               onPress={() => setShowThreadsModal(true)}
               className="w-10 h-10 rounded-full items-center justify-center"
               activeOpacity={0.7}
             >
-              <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+              <Ionicons name="chatbubbles-outline" size={22} color="#3B82F6" />
             </TouchableOpacity>
+
+            {/* Three‑dots icon for AI preference with popup menu */}
+            <View ref={threeDotsRef}>
+              <TouchableOpacity
+                onPress={() => setShowPreferenceMenu(!showPreferenceMenu)}
+                className="w-10 h-10 rounded-full items-center justify-center"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+              </TouchableOpacity>
+              {showPreferenceMenu && (
+                <>
+                  <TouchableOpacity
+                    style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                    activeOpacity={1}
+                    onPress={() => setShowPreferenceMenu(false)}
+                  />
+                  <View
+                    className="absolute bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                    style={{
+                      top: 40,
+                      right: 0,
+                      width: 160,
+                    }}
+                  >
+                    {["short", "medium", "deep_search"].map((pref) => (
+                      <TouchableOpacity
+                        key={pref}
+                        onPress={() => {
+                          setAiPreference(pref as any);
+                          setShowPreferenceMenu(false);
+                        }}
+                        className={`py-3 px-4 ${aiPreference === pref ? "bg-blue-100" : ""}`}
+                      >
+                        <Text
+                          className={`font-outfit-regular ${
+                            aiPreference === pref
+                              ? "text-blue-800 font-semibold"
+                              : "text-gray-800"
+                          }`}
+                        >
+                          {pref === "short"
+                            ? "Short (Quick)"
+                            : pref === "medium"
+                            ? "Medium (Balanced)"
+                            : "Deep (Detailed)"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
           </View>
         }
       />
-      {/* Rest of the component remains exactly the same */}
       <View className="px-6 pb-4 border-b border-gray-200">
         <View className="flex-row items-center gap-3 mt-2">
           <View className="flex-1">
@@ -707,7 +746,7 @@ export default function Search() {
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-        {/* Loading, error, and content sections – unchanged */}
+        {/* Loading, error, and content sections */}
         {(isLoading ||
           isShowingAd ||
           (activeQuery && !threadId && currentStatus?.hasSubscription)) &&
@@ -864,7 +903,7 @@ export default function Search() {
                   lineHeight: scaleLineHeight(scaleFont(18), 1.3),
                 }}
               >
-                {displayResult.answer ?? displayResult.data?.answer ?? ""}
+                {displayResult.answer ?? (displayResult as any).data?.answer ?? ""}
               </Text>
             </View>
 
@@ -1492,7 +1531,7 @@ export default function Search() {
                             {item.title}
                           </Text>
                           <View className="flex-row items-center mt-1">
-                            {item.total > 0 && (
+                            {(item as any).total !== undefined && (item as any).total > 0 && (
                               <Text
                                 className="text-gray-500 font-outfit-regular mr-3"
                                 style={{
@@ -1503,7 +1542,7 @@ export default function Search() {
                                   ),
                                 }}
                               >
-                                {item.total} results
+                                {(item as any).total} results
                               </Text>
                             )}
                             <Text
@@ -1584,7 +1623,12 @@ export default function Search() {
                       key={item.id}
                       className="bg-gray-50 rounded-xl p-4 mb-2"
                       onPress={() => {
-                        handleHistorySelect(item);
+                        // Pass correctly shaped object to handleHistorySelect
+                    handleHistorySelect({
+  query: item.title ?? "",    // ensures query is always a string
+  threadId: item.id,
+  title: item.title ?? "",
+});
                         setShowHistoryModal(false);
                       }}
                       activeOpacity={0.7}
@@ -1599,7 +1643,7 @@ export default function Search() {
                         {item.title}
                       </Text>
                       <View className="flex-row items-center mt-1">
-                        {item.total > 0 && (
+                        {(item as any).total !== undefined && (item as any).total > 0 && (
                           <Text
                             className="text-gray-500 font-outfit-regular mr-3"
                             style={{
@@ -1607,7 +1651,7 @@ export default function Search() {
                               lineHeight: scaleLineHeight(scaleFont(10), 1.5),
                             }}
                           >
-                            {item.total} results
+                            {(item as any).total} results
                           </Text>
                         )}
                         <Text
@@ -1773,10 +1817,10 @@ export default function Search() {
                 </View>
               </View>
               <KeyboardAwareScrollView
-  keyboardShouldPersistTaps="handled"
-  showsVerticalScrollIndicator={false}
-  contentContainerStyle={{ paddingBottom: 40 }}
->
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 40 }}
+              >
                 <View className="p-6">
                   <View className="mb-4">
                     <Text
@@ -1818,43 +1862,43 @@ export default function Search() {
 
                       {/* TYPE SELECT */}
                       <View className="mb-4">
-                      <View className="flex-row gap-2 mt-4">
-                        {["link", "pdf", "video"].map((type) => (
-                          <TouchableOpacity
-                            key={type}
-                            className={`px-3 py-1.5 rounded-full ${
-                              resourceType === type
-                                ? "bg-blue-500"
-                                : "bg-gray-200"
-                            }`}
-                            onPress={() => setResourceType(type as any)}
-                          >
-                            <Text
-                              className={`text-xs ${
+                        <View className="flex-row gap-2 mt-4">
+                          {["link", "pdf", "video"].map((type) => (
+                            <TouchableOpacity
+                              key={type}
+                              className={`px-3 py-1.5 rounded-full ${
                                 resourceType === type
-                                  ? "text-white"
-                                  : "text-gray-700"
+                                  ? "bg-blue-500"
+                                  : "bg-gray-200"
                               }`}
+                              onPress={() => setResourceType(type as any)}
                             >
-                              {type.toUpperCase()}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                              <Text
+                                className={`text-xs ${
+                                  resourceType === type
+                                    ? "text-white"
+                                    : "text-gray-700"
+                                }`}
+                              >
+                                {type.toUpperCase()}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
 
-                      {/* INPUT */}
-                      <TextInput
-                        value={resourceValue}
-                        onChangeText={setResourceValue}
-                        placeholder={
-                          resourceType === "link"
-                            ? "Paste link..."
-                            : resourceType === "pdf"
-                              ? "Paste PDF URL..."
-                              : "Paste video URL..."
-                        }
-                        className="border border-gray-300 rounded-lg p-3 mt-3 text-gray-900"
-                      />
+                        {/* INPUT */}
+                        <TextInput
+                          value={resourceValue}
+                          onChangeText={setResourceValue}
+                          placeholder={
+                            resourceType === "link"
+                              ? "Paste link..."
+                              : resourceType === "pdf"
+                                ? "Paste PDF URL..."
+                                : "Paste video URL..."
+                          }
+                          className="border border-gray-300 rounded-lg p-3 mt-3 text-gray-900"
+                        />
                       </View>
                     </View>
                   </View>

@@ -102,6 +102,9 @@ export default function Chat() {
     new Set(),
   );
   const scrollViewRef = useRef<ScrollView>(null);
+  const threeDotsRef = useRef<View>(null);
+  const [showPreferenceMenu, setShowPreferenceMenu] = useState(false);
+
   const services = useServices();
   const { search, subscription, thread, vault, resource } = services;
   const queryClient = useQueryClient();
@@ -634,24 +637,68 @@ export default function Chat() {
           onBackPress={() => router.push("/(tabs)/search")}
           rightElement={
             <View className="flex-row items-center gap-2">
-              <TouchableOpacity
-                onPress={() => {
-                  setThreadId(null);
-                  setMessages([]);
-                  setAiPreference("medium");
-                }}
-                className="w-10 h-10 rounded-full items-center justify-center"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={24} color="#3B82F6" />
-              </TouchableOpacity>
+             
+              {/* Threads icon (replaces time-outline) */}
               <TouchableOpacity
                 onPress={() => setShowThreadsModal(true)}
                 className="w-10 h-10 rounded-full items-center justify-center"
                 activeOpacity={0.7}
               >
-                <Ionicons name="time-outline" size={22} color="#3B82F6" />
+                <Ionicons name="chatbubbles-outline" size={22} color="#3B82F6" />
               </TouchableOpacity>
+
+              {/* Three-dots icon for AI preference */}
+              <View ref={threeDotsRef}>
+                <TouchableOpacity
+                  onPress={() => setShowPreferenceMenu(!showPreferenceMenu)}
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+                </TouchableOpacity>
+                {showPreferenceMenu && (
+                  <>
+                    <TouchableOpacity
+                      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                      activeOpacity={1}
+                      onPress={() => setShowPreferenceMenu(false)}
+                    />
+                    <View
+                      className="absolute bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                      style={{
+                        top: 40,
+                        right: 0,
+                        width: 160,
+                      }}
+                    >
+                      {["short", "medium", "deep_search"].map((pref) => (
+                        <TouchableOpacity
+                          key={pref}
+                          onPress={() => {
+                            setAiPreference(pref as any);
+                            setShowPreferenceMenu(false);
+                          }}
+                          className={`py-3 px-4 ${aiPreference === pref ? "bg-blue-100" : ""}`}
+                        >
+                          <Text
+                            className={`font-outfit-regular ${
+                              aiPreference === pref
+                                ? "text-blue-800 font-semibold"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {pref === "short"
+                              ? "Short (Quick)"
+                              : pref === "medium"
+                              ? "Medium (Balanced)"
+                              : "Deep (Detailed)"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
             </View>
           }
         />
@@ -1045,7 +1092,6 @@ export default function Chat() {
                       className="border border-gray-300 rounded-lg p-4 min-h-[200px] text-gray-900 text-base font-outfit-regular"
                     />
                   </View>
-
 
                   {/* ✅ FILE PICK BUTTON */}
                   <TouchableOpacity

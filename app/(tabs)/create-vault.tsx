@@ -43,20 +43,35 @@ export default function CreateVault() {
   });
 
   const createVaultMutation = useMutation({
-    mutationFn: (data: CreateVaultForm) => {
-      return vault.createVault({
+    mutationFn: async (data: CreateVaultForm) => {
+      // Return the created vault object (must include its `id`)
+      const newVault = await vault.createVault({
         title: data.title,
         description: data.description,
         summary: data.summary,
         mobileNumber: data.phone,
         email: data.email,
       });
+      return newVault;
     },
-    onSuccess: () => {
+    onSuccess: (newVault) => {
+      // Invalidate queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ["vaults"] });
       queryClient.invalidateQueries({ queryKey: ["vaultResourceCounts"] });
       showSuccessToast("Success", "Vault created successfully");
-      router.back();
+
+      // Navigate to Add Resource screen with the new vault ID
+      if (newVault?.id) {
+        // Adjust the pathname to match your actual Add Resource route
+        router.push({
+          pathname: "/add-resource", // e.g., "/resources/add" or "/vaults/[vaultId]/add-resource"
+          params: { vaultId: newVault.id },
+        });
+      } else {
+        // Fallback: if ID is missing, go back
+        console.warn("No vault ID returned, falling back to previous screen");
+        router.back();
+      }
     },
     onError: (error: any) => {
       console.error("Vault creation error:", error);

@@ -18,6 +18,9 @@ export interface SearchRequest {
   aiPreference?: AiPreference;
   limit?: number;
   offset?: number;
+  name?: string;
+  email?: string;
+  number?: string;
 }
 
 export interface CreateThreadResponse {
@@ -29,6 +32,7 @@ export interface ThreadListItem {
   userId: string;
   title: string | null;
   createdAt: string;
+  total: number
 }
 
 export interface ThreadMessage {

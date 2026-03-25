@@ -1,9 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VaultCard } from "../../components/chat/VaultCard";
@@ -39,25 +45,49 @@ type ChatMessage = {
   communityAnswers?: any[];
   matchedResources?: any[];
   /** Sorted desc by weight (safe copy, not mutating API response) */
-  vaultContributions?: { vaultId: string; resourceId: string; answer: string; weight: number; ownerId: string }[];
+  vaultContributions?: {
+    vaultId: string;
+    resourceId: string;
+    answer: string;
+    weight: number;
+    ownerId: string;
+  }[];
   vaultId?: string;
   resourceId?: string;
   /** Vault metadata merged from GET /vaults/:vaultId (persisted in thread state) */
   vaultTitle?: string;
   vaultDescription?: string;
+  name?: string;
+  email?: string;
+  number?: string;
 };
 
 export default function Chat() {
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({});
+    if (result.assets && result.assets.length > 0) {
+      setResourceValue(result.assets[0].uri);
+    }
+  };
+
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const params = useLocalSearchParams<{ threadId?: string }>();
   const [aiPreference, setAiPreference] = useState<
     "short" | "medium" | "deep_search"
   >("medium");
   const [inputText, setInputText] = useState("");
   const [showThreadsModal, setShowThreadsModal] = useState(false);
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<any>(null);
   const [contributeQuery, setContributeQuery] = useState<string>("");
   const [userAnswer, setUserAnswer] = useState("");
+  const [resourceType, setResourceType] = useState<
+    "link" | "pdf" | "video" | "image"
+  >("link");
+  const [resourceValue, setResourceValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [upvotedAnswerIds, setUpvotedAnswerIds] = useState<Set<string>>(
     new Set(),
@@ -80,6 +110,71 @@ export default function Chat() {
 
   // Ad revenue tracking (keep commented if needed)
   // const searchAdRevenue = (services as { searchAdRevenue?: { trackAdRevenue: (opts: any) => Promise<void> } }).searchAdRevenue;
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        router.push("/(tabs)/search");
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+
+      return () => sub.remove();
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!params.threadId) return;
+
+    (async () => {
+      try {
+        const response = await thread.getThreadById(params.threadId as string);
+
+        const rawMessages = response?.data?.thread ?? [];
+
+        const mappedMessages: ChatMessage[] = rawMessages.map(
+          (msg: { role: string; message: string }) => {
+            const raw = msg.message;
+
+            let parsed: any = null;
+            try {
+              if (typeof raw === "string" && raw.trim().startsWith("{")) {
+                parsed = JSON.parse(raw);
+              }
+            } catch {}
+
+            if (parsed && typeof parsed === "object" && parsed.content) {
+              return {
+                role: msg.role as "user" | "assistant",
+                content: parsed.content,
+                source: parsed.source,
+                vaultId: parsed.vaultId,
+                resourceId: parsed.resourceId,
+                qualityScore: parsed.qualityScore,
+                vaultTitle: parsed.vaultTitle,
+                vaultDescription: parsed.vaultDescription,
+                vaultContributions: parsed.vaultContributions,
+              };
+            }
+
+            return {
+              role: msg.role as "user" | "assistant",
+              content: raw,
+            };
+          },
+        );
+
+        setThreadId(params.threadId as string);
+        setMessages(mappedMessages);
+      } catch (err) {
+        console.error("Error loading thread:", err);
+        showErrorToast("Error", "Failed to load thread. Please try again.");
+      }
+    })();
+  }, [params.threadId, thread]);
 
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
     queryKey: ["subscriptionStatus", user?.id],
@@ -105,7 +200,7 @@ export default function Chat() {
       );
       setTimeout(
         () => router.push("/(tabs)/manage-subscriptions" as any),
-        1500,
+        3000,
       );
       return;
     }
@@ -118,7 +213,7 @@ export default function Chat() {
         );
         setTimeout(
           () => router.push("/(tabs)/manage-subscriptions" as any),
-          2000,
+          5000,
         );
         return;
       }
@@ -139,7 +234,7 @@ export default function Chat() {
       showErrorToast("Daily Limit Reached", message);
       setTimeout(
         () => router.push("/(tabs)/manage-subscriptions" as any),
-        2000,
+        5000,
       );
     }
   }, [currentStatus]);
@@ -190,10 +285,11 @@ export default function Chat() {
       // API returns { success, data: { answer, source, vaultId, resourceId, vaultContributions, ... } } – read from response.data
       const data = (response as { data?: typeof response })?.data ?? response;
       const rawContributions = data.vaultContributions;
-      const sortedVaultContributions =
-        rawContributions?.length
-          ? [...rawContributions].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
-          : undefined;
+      const sortedVaultContributions = rawContributions?.length
+        ? [...rawContributions].sort(
+            (a, b) => (b.weight ?? 0) - (a.weight ?? 0),
+          )
+        : undefined;
       const assistantMessage: ChatMessage = {
         role: "assistant",
         content: data.answer,
@@ -207,6 +303,9 @@ export default function Chat() {
         vaultContributions: sortedVaultContributions,
         vaultId: data.vaultId,
         resourceId: data.resourceId,
+        name: (data as any).name,
+        email: (data as any).email,
+        number: (data as any).number,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       // When source is vault: fetch vault details in background and merge into message (non-blocking)
@@ -531,7 +630,8 @@ export default function Chat() {
       >
         <ScreenHeader
           title="Chat"
-          showBackButton={false}
+          showBackButton
+          onBackPress={() => router.push("/(tabs)/search")}
           rightElement={
             <View className="flex-row items-center gap-2">
               <TouchableOpacity
@@ -561,7 +661,11 @@ export default function Chat() {
             ref={scrollViewRef}
             className="flex-1 px-4"
             contentContainerStyle={{ paddingBottom: 16 }}
-            onContentSizeChange={scrollToBottom}
+            onContentSizeChange={() => {
+              if (isSending) {
+                scrollToBottom();
+              }
+            }}
             keyboardShouldPersistTaps="handled"
           >
             {messages.length === 0 &&
@@ -596,352 +700,96 @@ export default function Chat() {
 
             {messages.map((msg, index) =>
               msg.role === "user" ? (
-                <View
-                  key={`user-${index}`}
-                  className="flex-row justify-end my-2"
-                >
-                  <View className="bg-blue-500 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[85%]">
-                    <Text
-                      className="text-white font-outfit-regular"
-                      style={{
-                        fontSize: scaleFont(15),
-                        lineHeight: scaleLineHeight(scaleFont(15), 1.4),
-                      }}
-                    >
+                <View key={`user-${index}`} className="px-4 my-2 items-end">
+                  <View className="bg-blue-500 rounded-2xl rounded-br-sm px-4 py-3 max-w-[80%]">
+                    <Text className="text-white text-[15px] leading-[20px]">
                       {msg.content}
                     </Text>
-                  </View>
-                </View>
-              ) : msg.source === "vault" &&
-                ((msg.vaultContributions?.length ?? 0) > 0 ||
-                  (msg.resourceId && msg.vaultId)) ? (
-                <View
-                  key={`assistant-${index}`}
-                  className="flex-row justify-start my-2"
-                >
-                  <View>
-                    {(() => {
-                      const contributions = msg.vaultContributions ?? [];
-                      const showAsCards = contributions.length > 0;
-                      return showAsCards ? (
-                        <>
-                          {contributions.map((contribution, cIndex) => (
-                          <View key={`${contribution.vaultId}-${contribution.resourceId}-${cIndex}`} className="mb-3">
-                            <VaultCard
-                              content={contribution.answer}
-                              resourceId={contribution.resourceId}
-                              vaultId={contribution.vaultId}
-                              vaultTitle={msg.vaultTitle} 
-                              vaultDescription={msg.vaultDescription}
-                              weight={contribution.weight}
-                              onViewResource={() =>
-                                router.push(
-                                  `/(tabs)/view-resource?id=${contribution.resourceId}` as any,
-                                )
-                              }
-                            />
-                          </View>
-                        ))}
-                        <TouchableOpacity
-                          className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
-                          onPress={() => {
-                            const query =
-                              index > 0 ? messages[index - 1].content : "";
-                            openContributeAnswer(query);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name="create-outline"
-                            size={16}
-                            color="#FFFFFF"
-                          />
-                          <Text
-                            className="text-white font-outfit-semi-bold ml-1 text-xs"
-                            style={{ fontSize: scaleFont(12) }}
-                          >
-                            Contribute Answer
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                      ) : (
-                      <>
-                        <VaultCard
-                          content={msg.content}
-                          qualityScore={msg.qualityScore}
-                          tokensUsed={msg.tokensUsed}
-                          resourceId={msg.resourceId!}
-                          vaultId={msg.vaultId!}
-                          vaultTitle={msg.vaultTitle}
-                          vaultDescription={msg.vaultDescription}
-                          onViewResource={() =>
-                            router.push(
-                              `/(tabs)/view-resource?id=${msg.resourceId}` as any,
-                            )
-                          }
-                        />
-                        <TouchableOpacity
-                          className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
-                          onPress={() => {
-                            const query =
-                              index > 0 ? messages[index - 1].content : "";
-                            openContributeAnswer(query);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name="create-outline"
-                            size={16}
-                            color="#FFFFFF"
-                          />
-                          <Text
-                            className="text-white font-outfit-semi-bold ml-1 text-xs"
-                            style={{ fontSize: scaleFont(12) }}
-                          >
-                            Contribute Answer
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                      );
-                    })()}
                   </View>
                 </View>
               ) : (
                 <View
                   key={`assistant-${index}`}
-                  className="flex-row justify-start my-2"
+                  className="px-4 my-2 items-start"
                 >
-                  <View className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+                  {/* MESSAGE CONTAINER */}
+                  <View className="max-w-[80%]">
+                    {/* SOURCE TAG */}
                     {msg.source && (
                       <View
-                        className={`self-start rounded-full px-2 py-1 mb-2 ${getSourceBadgeColor(msg.source)}`}
+                        className={`mb-1 self-start px-2 py-0.5 rounded-full ${getSourceBadgeColor(msg.source)}`}
                       >
-                        <Text
-                          className="font-outfit-semi-bold text-xs"
-                          style={{ fontSize: scaleFont(10) }}
-                        >
+                        <Text className="text-[10px] font-semibold">
                           {getSourceLabel(msg.source)}
                         </Text>
                       </View>
                     )}
-                    <Text
-                      className="text-gray-900 font-outfit-regular"
-                      style={{
-                        fontSize: scaleFont(15),
-                        lineHeight: scaleLineHeight(scaleFont(15), 1.4),
-                      }}
-                    >
-                      {msg.content}
-                    </Text>
-                    {(msg.qualityScore != null && msg.qualityScore > 0) ||
-                    (msg.tokensUsed != null && msg.tokensUsed > 0) ? (
-                      <View className="flex-row items-center gap-3 mt-2 flex-wrap">
-                        {msg.qualityScore != null && msg.qualityScore > 0 && (
-                          <View className="flex-row items-center">
-                            <Ionicons name="star" size={14} color="#F59E0B" />
-                            <Text
-                              className="text-gray-600 font-outfit-semi-bold ml-1 text-xs"
-                              style={{ fontSize: scaleFont(10) }}
-                            >
-                              {Math.round(msg.qualityScore * 100)}%
-                            </Text>
-                          </View>
-                        )}
-                        {msg.tokensUsed != null && msg.tokensUsed > 0 && (
-                          <View className="flex-row items-center">
-                            <Ionicons name="flash" size={14} color="#6B7280" />
-                            <Text
-                              className="text-gray-600 font-outfit-regular ml-1 text-xs"
-                              style={{ fontSize: scaleFont(10) }}
-                            >
-                              {msg.tokensUsed} tokens
-                            </Text>
-                          </View>
-                        )}
+
+                    {/* CONTENT */}
+                    {msg.source === "vault" ? (
+                      <VaultCard
+                        content={msg.content}
+                        qualityScore={msg.qualityScore}
+                        tokensUsed={msg.tokensUsed}
+                        resourceId={msg.resourceId!}
+                        vaultId={msg.vaultId!}
+                        vaultTitle={msg.vaultTitle}
+                        vaultDescription={msg.vaultDescription}
+                        onViewResource={() =>
+                          router.push(
+                            `/(tabs)/view-resource?id=${msg.resourceId}` as any,
+                          )
+                        }
+                      />
+                    ) : (
+                      <View className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3">
+                        <Text className="text-gray-900 text-[15px] leading-[20px]">
+                          {msg.content}
+                        </Text>
                       </View>
-                    ) : null}
-                    {msg.source === "community" &&
-                      msg.answerId &&
-                      msg.answerUserId !== user?.id && (
-                        <TouchableOpacity
-                          className={`mt-2 self-start rounded-lg px-3 py-1.5 flex-row items-center ${
-                            upvotedAnswerIds.has(msg.answerId!)
-                              ? "bg-green-500"
-                              : "bg-purple-500"
-                          }`}
-                          onPress={() => upvoteMutation.mutate(msg.answerId!)}
-                          disabled={upvoteMutation.isPending}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name={
-                              upvotedAnswerIds.has(msg.answerId!)
-                                ? "checkmark-circle"
-                                : "thumbs-up"
-                            }
-                            size={16}
-                            color="#FFFFFF"
-                          />
-                          <Text
-                            className="text-white font-outfit-semi-bold ml-1 text-xs"
-                            style={{ fontSize: scaleFont(12) }}
-                          >
-                            {upvoteMutation.isPending
-                              ? "..."
-                              : upvotedAnswerIds.has(msg.answerId!)
-                                ? "Upvoted"
-                                : "Upvote"}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    {(msg.source !== "competitive" &&
-                      msg.source !== "paid_ai") && (
+                    )}
+
+                    {/* ACTION BUTTONS (CHATGPT STYLE) */}
+                    <View className="flex-row items-center gap-2 mt-2">
+                      {/* CONTRIBUTE */}
                       <TouchableOpacity
-                        className="mt-2 self-start rounded-lg px-3 py-1.5 bg-blue-500 flex-row items-center"
+                        className="flex-1 rounded-lg py-2 bg-blue-500 flex-row items-center justify-center"
                         onPress={() => {
                           const query =
                             index > 0 ? messages[index - 1].content : "";
                           openContributeAnswer(query);
                         }}
-                        activeOpacity={0.8}
                       >
                         <Ionicons
                           name="create-outline"
                           size={16}
                           color="#FFFFFF"
                         />
-                        <Text
-                          className="text-white font-outfit-semi-bold ml-1 text-xs"
-                          style={{ fontSize: scaleFont(12) }}
-                        >
-                          Contribute Answer
+                        <Text className="text-white ml-1 text-xs">
+                          Contribute
                         </Text>
                       </TouchableOpacity>
-                    )}
-                    {msg.communityAnswers &&
-                      msg.communityAnswers.length > 1 && (
-                        <View className="mt-3 pt-2 border-t border-gray-200">
-                          <Text
-                            className="text-gray-700 font-outfit-semi-bold mb-2 text-xs"
-                            style={{ fontSize: scaleFont(12) }}
-                          >
-                            Other Community Answers (
-                            {msg.communityAnswers.length - 1})
+
+                      {/* TALK TO EXPERT */}
+                      {(msg.email || msg.number) && (
+                        <TouchableOpacity
+                          className="flex-1 rounded-lg py-2 bg-green-500 flex-row items-center justify-center"
+                          onPress={() => {
+                            setSelectedContact(msg);
+                            setShowPaymentModal(true);
+                          }}
+                        >
+                          <Ionicons
+                            name="call-outline"
+                            size={16}
+                            color="#FFFFFF"
+                          />
+                          <Text className="text-white ml-1 text-xs">
+                            Connect with Expert
                           </Text>
-                          {msg.communityAnswers.slice(1).map((ca: any) => (
-                            <View
-                              key={ca.answerId}
-                              className="bg-white border border-gray-200 rounded-lg p-3 mb-2"
-                            >
-                              <Text
-                                className="text-gray-900 font-outfit-regular text-xs"
-                                style={{
-                                  fontSize: scaleFont(12),
-                                  lineHeight: scaleLineHeight(
-                                    scaleFont(12),
-                                    1.4,
-                                  ),
-                                }}
-                              >
-                                {ca.answer}
-                              </Text>
-                              {ca.answerUserId !== user?.id && (
-                                <TouchableOpacity
-                                  className="mt-2 self-start rounded px-2 py-1 bg-purple-500 flex-row items-center"
-                                  onPress={() =>
-                                    upvoteMutation.mutate(ca.answerId)
-                                  }
-                                  disabled={upvoteMutation.isPending}
-                                >
-                                  <Ionicons
-                                    name="thumbs-up"
-                                    size={14}
-                                    color="#FFFFFF"
-                                  />
-                                  <Text
-                                    className="text-white font-outfit-semi-bold ml-1 text-xs"
-                                    style={{ fontSize: scaleFont(10) }}
-                                  >
-                                    Upvote
-                                    {ca.upvotes > 0 ? ` (${ca.upvotes})` : ""}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          ))}
-                        </View>
+                        </TouchableOpacity>
                       )}
-                    {msg.matchedResources &&
-                      msg.matchedResources.length > 0 && (
-                        <View className="mt-3 pt-2 border-t border-gray-200">
-                          <Text
-                            className="text-gray-700 font-outfit-semi-bold mb-2 text-xs"
-                            style={{ fontSize: scaleFont(12) }}
-                          >
-                            Related Resources
-                          </Text>
-                          {msg.matchedResources.map((resource: any) => (
-                            <TouchableOpacity
-                              key={resource.id}
-                              className="bg-white border border-gray-200 rounded-lg p-3 mb-2 flex-row items-center"
-                              onPress={() =>
-                                router.push(
-                                  `/(tabs)/view-resource?id=${resource.id}` as any,
-                                )
-                              }
-                              activeOpacity={0.7}
-                            >
-                              <View
-                                className="rounded-lg p-2 mr-2"
-                                style={{
-                                  backgroundColor:
-                                    resource.type === "video"
-                                      ? "#3B82F620"
-                                      : resource.type === "pdf"
-                                        ? "#EF444420"
-                                        : resource.type === "note"
-                                          ? "#10B98120"
-                                          : "#F59E0B20",
-                                }}
-                              >
-                                <Ionicons
-                                  name={
-                                    resource.type === "video"
-                                      ? "videocam"
-                                      : resource.type === "pdf"
-                                        ? "document-text"
-                                        : resource.type === "note"
-                                          ? "document"
-                                          : "link"
-                                  }
-                                  size={20}
-                                  color={
-                                    resource.type === "video"
-                                      ? "#3B82F6"
-                                      : resource.type === "pdf"
-                                        ? "#EF4444"
-                                        : resource.type === "note"
-                                          ? "#10B981"
-                                          : "#F59E0B"
-                                  }
-                                />
-                              </View>
-                              <Text
-                                className="flex-1 text-gray-900 font-outfit-semi-bold text-xs"
-                                numberOfLines={2}
-                                style={{ fontSize: scaleFont(12) }}
-                              >
-                                {resource.title}
-                              </Text>
-                              <Ionicons
-                                name="chevron-forward"
-                                size={16}
-                                color="#9CA3AF"
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
+                    </View>
                   </View>
                 </View>
               ),
@@ -1197,6 +1045,52 @@ export default function Chat() {
                       className="border border-gray-300 rounded-lg p-4 min-h-[200px] text-gray-900 text-base font-outfit-regular"
                     />
                   </View>
+
+
+                  {/* ✅ FILE PICK BUTTON */}
+                  <TouchableOpacity
+                    onPress={pickFile}
+                    className="mt-2 bg-[#99c2ff] rounded-lg py-2 items-center"
+                  >
+                    <Text>Add File</Text>
+                  </TouchableOpacity>
+
+                  {/* ✅ RESOURCE TYPE SELECT */}
+                  <View className="flex-row gap-2 mt-4">
+                    {["link", "pdf", "video"].map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        className={`px-3 py-1.5 rounded-full ${
+                          resourceType === type ? "bg-blue-500" : "bg-gray-200"
+                        }`}
+                        onPress={() => setResourceType(type as any)}
+                      >
+                        <Text
+                          className={`text-xs ${
+                            resourceType === type
+                              ? "text-white"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {type.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* ✅ RESOURCE INPUT */}
+                  <TextInput
+                    value={resourceValue}
+                    onChangeText={setResourceValue}
+                    placeholder={
+                      resourceType === "link"
+                        ? "Paste link..."
+                        : resourceType === "pdf"
+                          ? "Paste PDF URL..."
+                          : "Paste video URL..."
+                    }
+                    className="border border-gray-300 rounded-lg p-3 mt-3 text-gray-900"
+                  />
                   <TouchableOpacity
                     className="bg-blue-500 rounded-lg py-4 items-center"
                     onPress={() => {
@@ -1232,6 +1126,146 @@ export default function Chat() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      {showPaymentModal && selectedContact && (
+        <Modal
+          visible={showPaymentModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowPaymentModal(false)}
+        >
+          <View className="flex-1 bg-black/60 justify-center items-center px-4">
+            <View className="bg-white rounded-2xl p-6 w-full max-w-md items-center">
+              <Text className="text-lg font-bold mb-2">
+                Unlock Expert Contact
+              </Text>
+
+              <Text className="text-gray-600 mb-4 text-center">
+                Pay ₹49 to view expert contact details
+              </Text>
+
+              {/* PAY BUTTON */}
+              <TouchableOpacity
+                className="bg-green-500 rounded-lg py-3 px-6 w-full items-center mb-3"
+                onPress={async () => {
+                  try {
+                    const RazorpayCheckout = (
+                      await import("react-native-razorpay")
+                    ).default;
+
+                    if (!RazorpayCheckout) {
+                      showErrorToast("Error", "Payment SDK not loaded");
+                      return;
+                    }
+
+                    // 🔴 call backend
+                    const res = await fetch(
+                      "https://knowvaults.com/api/payments/create-contact-expert-order",
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${user?.accessToken}`,
+                        },
+                        body: JSON.stringify({}),
+                      },
+                    );
+
+                    const result = await res.json();
+                    const order = result.data.order;
+                    const key = result.data.keyId;
+
+                    const options = {
+                      description: "Unlock Expert Contact",
+                      currency: "INR",
+                      key: key,
+                      amount: order.amount,
+                      order_id: order.id,
+                      name: "KnowVault",
+                      prefill: {
+                        email: user?.email || "",
+                        contact: user?.phone || "",
+                        name: user?.name || "",
+                      },
+                      theme: { color: "#3B82F6" },
+                    };
+
+                    RazorpayCheckout.open(options)
+                      .then(async (response: any) => {
+                        try {
+                          await fetch(
+                            "https://knowvaults.com/api/payments/unlock-contact",
+                            {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${user?.accessToken}`,
+                              },
+                              body: JSON.stringify({
+                                vaultId: selectedContact?.vaultId,
+                                razorpayPaymentId: response.razorpay_payment_id,
+                              }),
+                            },
+                          );
+
+                          setShowPaymentModal(false);
+                          setShowContactModal(true);
+                        } catch (err) {
+                          showErrorToast("Error", "Failed to unlock contact");
+                        }
+                      })
+                      .catch((error: any) => {
+                        showErrorToast(
+                          "Failed",
+                          error?.description || "Payment failed",
+                        );
+                      });
+                  } catch (err) {
+                    showErrorToast("Error", "Payment failed");
+                  }
+                }}
+              >
+                <Text className="text-white font-semibold">Pay ₹49</Text>
+              </TouchableOpacity>
+
+              {/* CANCEL */}
+              <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                <Text className="text-gray-500">Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showContactModal && selectedContact && (
+        <Modal
+          visible={showContactModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowContactModal(false)}
+        >
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <View className="bg-white rounded-2xl p-6 w-full max-w-md">
+              <Text className="text-lg font-bold mb-4 text-center">
+                Expert Contact
+              </Text>
+
+              <Text className="mb-2">
+                Name: {selectedContact?.name || "N/A"}
+              </Text>
+
+              <Text className="mb-2">Email: {selectedContact?.email}</Text>
+
+              <Text className="mb-4">Mobile: {selectedContact?.number}</Text>
+
+              <TouchableOpacity
+                className="bg-blue-500 rounded-lg py-3 items-center"
+                onPress={() => setShowContactModal(false)}
+              >
+                <Text className="text-white font-semibold">Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

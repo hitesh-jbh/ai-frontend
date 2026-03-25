@@ -57,10 +57,10 @@ export function VaultCard({
 
   useEffect(() => {
     if (vaultDetails) {
-      setIsFollowed(vaultDetails.isFollowed);
-      setIsSaved(vaultDetails.isSaved);
+      setIsFollowed(vaultDetails.isFollowed ?? false);
+      setIsSaved(vaultDetails.isSaved ?? false);
     }
-  }, [vaultDetails]);
+  }, [vaultDetails, vaultId]);
 
   const handleFollowToggle = async () => {
     if (followPending) return;
@@ -134,7 +134,6 @@ export function VaultCard({
 
   return (
     <View className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
-
       {/* Vault Title */}
       <View className="flex-row items-center justify-between mb-2">
         <View className="rounded-full px-2 py-1 bg-indigo-100">
@@ -142,45 +141,53 @@ export function VaultCard({
             className="font-outfit-semi-bold text-indigo-700 text-xs"
             style={{ fontSize: scaleFont(10) }}
           >
-            Vault{vaultTitle ? ` · ${vaultTitle}` : ""}
+            Vault
           </Text>
         </View>
 
         {/* Follow + Save */}
         <View className="flex-row items-center">
-
           <TouchableOpacity
             onPress={handleFollowToggle}
             disabled={followPending}
-            className="p-1 mr-2"
+            className={`flex-row items-center px-3 py-1.5 rounded-full mr-2 ${
+              isFollowed ? "bg-indigo-100" : "bg-gray-200"
+            }`}
           >
             {followPending ? (
               <ActivityIndicator size="small" color="#6366F1" />
             ) : (
-              <Ionicons
-                name={isFollowed ? "heart" : "heart-outline"}
-                size={18}
-                color={isFollowed ? "#6366F1" : "#6B7280"}
-              />
+              <>
+                <Ionicons
+                  name={isFollowed ? "heart" : "heart-outline"}
+                  size={14}
+                  color={isFollowed ? "#6366F1" : "#374151"}
+                />
+                <Text className="ml-1 text-xs text-gray-700">Follow</Text>
+              </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleSaveToggle}
             disabled={savePending}
-            className="p-1"
+            className={`flex-row items-center px-3 py-1.5 rounded-full ${
+              isSaved ? "bg-amber-100" : "bg-gray-200"
+            }`}
           >
             {savePending ? (
               <ActivityIndicator size="small" color="#D97706" />
             ) : (
-              <Ionicons
-                name={isSaved ? "bookmark" : "bookmark-outline"}
-                size={18}
-                color={isSaved ? "#D97706" : "#6B7280"}
-              />
+              <>
+                <Ionicons
+                  name={isSaved ? "bookmark" : "bookmark-outline"}
+                  size={14}
+                  color={isSaved ? "#D97706" : "#374151"}
+                />
+                <Text className="ml-1 text-xs text-gray-700">Save</Text>
+              </>
             )}
           </TouchableOpacity>
-
         </View>
       </View>
 
@@ -223,33 +230,25 @@ export function VaultCard({
       </View>
 
       {/* Buttons Bottom Right – narrower and spaced with gap */}
-      <View className="mt-3 pt-2 border-t border-gray-200 flex-row justify-end items-center gap-2">
-        <TouchableOpacity
-          className="rounded-lg px-2 py-1.5 bg-blue-500 flex-row items-center"
-          onPress={onViewResource}
-        >
-          <Ionicons name="open-outline" size={14} color="#FFFFFF" />
-          <Text
-            className="text-white ml-1"
-            style={{ fontSize: scaleFont(11) }}
-          >
-            View Resource
-          </Text>
-        </TouchableOpacity>
+      <View className="mt-2 pt-2 border-t border-gray-200 flex-row items-center gap-1">
 
-        <TouchableOpacity
-          className="rounded-lg px-2 py-1.5 bg-gray-400 flex-row items-center"
-          onPress={openReviewModal}
-        >
-          <Ionicons name="pencil-outline" size={14} color="#FFFFFF" />
-          <Text
-            className="text-white ml-1"
-            style={{ fontSize: scaleFont(11) }}
-          >
-            Review
-          </Text>
-        </TouchableOpacity>
-      </View>
+  <TouchableOpacity
+    className="flex-1 rounded-md py-1.5 bg-blue-500 flex-row items-center justify-center"
+    onPress={onViewResource}
+  >
+    <Ionicons name="open-outline" size={16} color="#FFFFFF" />
+    <Text className="text-white ml-1 text-xs">Resource</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    className="flex-1 rounded-md py-1.5 bg-gray-400 flex-row items-center justify-center"
+    onPress={openReviewModal}
+  >
+    <Ionicons name="pencil-outline" size={16} color="#FFFFFF" />
+    <Text className="text-white ml-1 text-xs">Review</Text>
+  </TouchableOpacity>
+
+</View>
 
       {/* Review Modal */}
       <Modal

@@ -545,6 +545,7 @@ export default function Vaults() {
 
           {/* Create Vault Button */}
           <TouchableOpacity
+          
             onPress={() => router.push("/(tabs)/create-vault")}
             className="bg-blue-500 rounded-lg py-3 px-4 flex-row items-center justify-center mb-6"
             activeOpacity={0.7}

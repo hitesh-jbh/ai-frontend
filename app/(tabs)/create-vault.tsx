@@ -4,7 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import React from "react";
 import { useForm } from "react-hook-form";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
 import { Button } from "../../components/ui/Button";
@@ -12,18 +18,20 @@ import { ControlledInput } from "../../components/ui/Input";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { showErrorToast, showSuccessToast } from "../../utils/toast";
+import { useAuthStore } from "../../store/auth-store";
 
 const createVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(1000).optional(),
   summary: z.string().max(500).optional(),
-  phone: z.string().max(20).optional(),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  phone: z.string().min(1, "Phone is required").max(20),
+  email: z.string().email("Invalid email address"),
 });
 
 type CreateVaultForm = z.infer<typeof createVaultSchema>;
 
 export default function CreateVault() {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const { vault } = useServices();
 
@@ -37,8 +45,8 @@ export default function CreateVault() {
       title: "",
       description: "",
       summary: "",
-      phone: "",
-      email: "",
+      phone: user?.phone || "",
+      email: user?.email || "",
     },
   });
 
@@ -95,7 +103,7 @@ export default function CreateVault() {
     options?: {
       keyboardType?: "default" | "email-address" | "phone-pad";
       autoCapitalize?: "none" | "sentences" | "words" | "characters";
-    }
+    },
   ) => (
     <View className="mb-5">
       <Text className="text-xs font-outfit-medium text-gray-500 mb-1 uppercase tracking-wider">

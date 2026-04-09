@@ -53,10 +53,11 @@ export default function Search() {
   );
   const [showSubmitAnswer, setShowSubmitAnswer] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [aiPreference, setAiPreference] = useState<"short" | "medium" | "deep_search">("medium");
+  const [aiPreference, setAiPreference] = useState<
+    "short" | "medium" | "deep_search"
+  >("medium");
   const [showThreadsModal, setShowThreadsModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showPreferenceMenu, setShowPreferenceMenu] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
   const [resourceType, setResourceType] = useState<"link" | "pdf" | "video">(
     "link",
@@ -73,7 +74,6 @@ export default function Search() {
   const [fetchedResources, setFetchedResources] = useState<any[] | null>(null);
   const [isFetchingResources, setIsFetchingResources] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
-  const threeDotsRef = useRef<View>(null);
 
   // State for follow/save of the main vault
   const [isFollowed, setIsFollowed] = useState(false);
@@ -673,59 +673,6 @@ export default function Search() {
             >
               <Ionicons name="chatbubbles-outline" size={22} color="#3B82F6" />
             </TouchableOpacity>
-
-            {/* Three‑dots icon for AI preference with popup menu */}
-            <View ref={threeDotsRef}>
-              <TouchableOpacity
-                onPress={() => setShowPreferenceMenu(!showPreferenceMenu)}
-                className="w-10 h-10 rounded-full items-center justify-center"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
-              </TouchableOpacity>
-              {showPreferenceMenu && (
-                <>
-                  <TouchableOpacity
-                    style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                    activeOpacity={1}
-                    onPress={() => setShowPreferenceMenu(false)}
-                  />
-                  <View
-                    className="absolute bg-white rounded-lg shadow-lg border border-gray-200 z-10"
-                    style={{
-                      top: 40,
-                      right: 0,
-                      width: 160,
-                    }}
-                  >
-                    {["short", "medium", "deep_search"].map((pref) => (
-                      <TouchableOpacity
-                        key={pref}
-                        onPress={() => {
-                          setAiPreference(pref as any);
-                          setShowPreferenceMenu(false);
-                        }}
-                        className={`py-3 px-4 ${aiPreference === pref ? "bg-blue-100" : ""}`}
-                      >
-                        <Text
-                          className={`font-outfit-regular ${
-                            aiPreference === pref
-                              ? "text-blue-800 font-semibold"
-                              : "text-gray-800"
-                          }`}
-                        >
-                          {pref === "short"
-                            ? "Short (Quick)"
-                            : pref === "medium"
-                            ? "Medium (Balanced)"
-                            : "Deep (Detailed)"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
           </View>
         }
       />
@@ -741,6 +688,42 @@ export default function Search() {
               placeholder="Ask a question..."
               showSuggestions={false}
             />
+          </View>
+        </View>
+
+        {/* AI preference (answer depth) */}
+        <View className="mt-3">
+          <Text className="text-gray-600 font-outfit-regular mb-2">
+            Answer depth
+          </Text>
+          <View className="bg-gray-100 rounded-full p-1 flex-row">
+            {(
+              [
+                { key: "short", label: "Quick ⚡" },
+                { key: "medium", label: "Balanced ⚖️" },
+                { key: "deep_search", label: "Deep 🔍" },
+              ] as const
+            ).map((opt) => {
+              const selected = aiPreference === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setAiPreference(opt.key)}
+                  activeOpacity={0.8}
+                  className={`flex-1 py-2 rounded-full items-center justify-center ${
+                    selected ? "bg-white" : ""
+                  }`}
+                >
+                  <Text
+                    className={`font-outfit-regular text-xs ${
+                      selected ? "text-blue-700 font-semibold" : "text-gray-700"
+                    }`}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </View>
@@ -790,6 +773,18 @@ export default function Search() {
             >
               Please try again
             </Text>
+            <TouchableOpacity
+              className="bg-blue-500 rounded-lg py-3 items-center mt-6 px-8"
+              onPress={() => refetch()}
+              disabled={isLoading}
+              activeOpacity={isLoading ? 1 : 0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-white font-semibold">Try Again</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
@@ -894,6 +889,15 @@ export default function Search() {
               </View>
             )}
 
+            {displayResult.source === "vault" && (
+              <View className="bg-yellow-50 rounded-xl px-4 py-3 mb-4">
+                <Text className="text-yellow-900 text-sm text-center font-semibold">
+                  ⚡ This answer is AI + human verified. Connect with expert for
+                  full details.
+                </Text>
+              </View>
+            )}
+
             {/* Vault Answer */}
             <View className="bg-gray-50 rounded-2xl p-5 mb-4">
               <Text
@@ -903,7 +907,9 @@ export default function Search() {
                   lineHeight: scaleLineHeight(scaleFont(18), 1.3),
                 }}
               >
-                {displayResult.answer ?? (displayResult as any).data?.answer ?? ""}
+                {displayResult.answer ??
+                  (displayResult as any).data?.answer ??
+                  ""}
               </Text>
             </View>
 
@@ -1531,20 +1537,21 @@ export default function Search() {
                             {item.title}
                           </Text>
                           <View className="flex-row items-center mt-1">
-                            {(item as any).total !== undefined && (item as any).total > 0 && (
-                              <Text
-                                className="text-gray-500 font-outfit-regular mr-3"
-                                style={{
-                                  fontSize: scaleFont(10),
-                                  lineHeight: scaleLineHeight(
-                                    scaleFont(10),
-                                    1.5,
-                                  ),
-                                }}
-                              >
-                                {(item as any).total} results
-                              </Text>
-                            )}
+                            {(item as any).total !== undefined &&
+                              (item as any).total > 0 && (
+                                <Text
+                                  className="text-gray-500 font-outfit-regular mr-3"
+                                  style={{
+                                    fontSize: scaleFont(10),
+                                    lineHeight: scaleLineHeight(
+                                      scaleFont(10),
+                                      1.5,
+                                    ),
+                                  }}
+                                >
+                                  {(item as any).total} results
+                                </Text>
+                              )}
                             <Text
                               className="text-gray-400 font-outfit-regular"
                               style={{
@@ -1624,11 +1631,11 @@ export default function Search() {
                       className="bg-gray-50 rounded-xl p-4 mb-2"
                       onPress={() => {
                         // Pass correctly shaped object to handleHistorySelect
-                    handleHistorySelect({
-  query: item.title ?? "",    // ensures query is always a string
-  threadId: item.id,
-  title: item.title ?? "",
-});
+                        handleHistorySelect({
+                          query: item.title ?? "", // ensures query is always a string
+                          threadId: item.id,
+                          title: item.title ?? "",
+                        });
                         setShowHistoryModal(false);
                       }}
                       activeOpacity={0.7}
@@ -1643,17 +1650,18 @@ export default function Search() {
                         {item.title}
                       </Text>
                       <View className="flex-row items-center mt-1">
-                        {(item as any).total !== undefined && (item as any).total > 0 && (
-                          <Text
-                            className="text-gray-500 font-outfit-regular mr-3"
-                            style={{
-                              fontSize: scaleFont(10),
-                              lineHeight: scaleLineHeight(scaleFont(10), 1.5),
-                            }}
-                          >
-                            {(item as any).total} results
-                          </Text>
-                        )}
+                        {(item as any).total !== undefined &&
+                          (item as any).total > 0 && (
+                            <Text
+                              className="text-gray-500 font-outfit-regular mr-3"
+                              style={{
+                                fontSize: scaleFont(10),
+                                lineHeight: scaleLineHeight(scaleFont(10), 1.5),
+                              }}
+                            >
+                              {(item as any).total} results
+                            </Text>
+                          )}
                         <Text
                           className="text-gray-400 font-outfit-regular"
                           style={{

@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 
 import {
   ActivityIndicator,
@@ -84,6 +83,7 @@ export default function Chat() {
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [contributeQuery, setContributeQuery] = useState<string>("");
   const [userAnswer, setUserAnswer] = useState("");
+  const [showPreference, setShowPreference] = useState(true);
   const [resourceType, setResourceType] = useState<
     "link" | "pdf" | "video" | "image"
   >("link");
@@ -151,6 +151,9 @@ export default function Chat() {
 
             if (parsed && typeof parsed === "object" && parsed.content) {
               return {
+                name: parsed.name,
+                email: parsed.email,
+                number: parsed.number,
                 role: msg.role as "user" | "assistant",
                 content: parsed.content,
                 source: parsed.source,
@@ -637,14 +640,17 @@ export default function Chat() {
           onBackPress={() => router.push("/(tabs)/search")}
           rightElement={
             <View className="flex-row items-center gap-2">
-             
               {/* Threads icon (replaces time-outline) */}
               <TouchableOpacity
                 onPress={() => setShowThreadsModal(true)}
                 className="w-10 h-10 rounded-full items-center justify-center"
                 activeOpacity={0.7}
               >
-                <Ionicons name="chatbubbles-outline" size={22} color="#3B82F6" />
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={22}
+                  color="#3B82F6"
+                />
               </TouchableOpacity>
 
               {/* Three-dots icon for AI preference */}
@@ -654,12 +660,22 @@ export default function Chat() {
                   className="w-10 h-10 rounded-full items-center justify-center"
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="ellipsis-vertical" size={22} color="#3B82F6" />
+                  <Ionicons
+                    name="ellipsis-vertical"
+                    size={22}
+                    color="#3B82F6"
+                  />
                 </TouchableOpacity>
                 {showPreferenceMenu && (
                   <>
                     <TouchableOpacity
-                      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                      }}
                       activeOpacity={1}
                       onPress={() => setShowPreferenceMenu(false)}
                     />
@@ -690,8 +706,8 @@ export default function Chat() {
                             {pref === "short"
                               ? "Short (Quick)"
                               : pref === "medium"
-                              ? "Medium (Balanced)"
-                              : "Deep (Detailed)"}
+                                ? "Medium (Balanced)"
+                                : "Deep (Detailed)"}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -762,7 +778,7 @@ export default function Chat() {
                   {/* MESSAGE CONTAINER */}
                   <View className="max-w-[80%]">
                     {/* SOURCE TAG */}
-                    {msg.source && (
+                    {msg.source && msg.source !== "vault" && (
                       <View
                         className={`mb-1 self-start px-2 py-0.5 rounded-full ${getSourceBadgeColor(msg.source)}`}
                       >
@@ -774,20 +790,31 @@ export default function Chat() {
 
                     {/* CONTENT */}
                     {msg.source === "vault" ? (
-                      <VaultCard
-                        content={msg.content}
-                        qualityScore={msg.qualityScore}
-                        tokensUsed={msg.tokensUsed}
-                        resourceId={msg.resourceId!}
-                        vaultId={msg.vaultId!}
-                        vaultTitle={msg.vaultTitle}
-                        vaultDescription={msg.vaultDescription}
-                        onViewResource={() =>
-                          router.push(
-                            `/(tabs)/view-resource?id=${msg.resourceId}` as any,
-                          )
-                        }
-                      />
+                      <View>
+                        {/* ✅ INFO BANNER */}
+                        <View className="bg-yellow-50 rounded-xl px-4 py-3 mb-2">
+                          <Text className="text-yellow-900 text-sm text-center font-semibold">
+                            ⚡ This answer is AI + human verified. Connect with
+                            expert for full details.
+                          </Text>
+                        </View>
+
+                        {/* ✅ VAULT CARD */}
+                        <VaultCard
+                          content={msg.content}
+                          qualityScore={msg.qualityScore}
+                          tokensUsed={msg.tokensUsed}
+                          resourceId={msg.resourceId!}
+                          vaultId={msg.vaultId!}
+                          vaultTitle={msg.vaultTitle}
+                          vaultDescription={msg.vaultDescription}
+                          onViewResource={() =>
+                            router.push(
+                              `/(tabs)/view-resource?id=${msg.resourceId}` as any,
+                            )
+                          }
+                        />
+                      </View>
                     ) : (
                       <View className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3">
                         <Text className="text-gray-900 text-[15px] leading-[20px]">
@@ -858,39 +885,89 @@ export default function Chat() {
           </ScrollView>
 
           <View className="px-4 py-3 border-t border-gray-200 bg-white">
-            <View className="flex-row items-end gap-2">
-              <TextInput
-                className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-gray-900 font-outfit-regular max-h-24"
-                style={{
-                  fontSize: scaleFont(15),
-                  lineHeight: scaleLineHeight(scaleFont(15), 1.4),
-                }}
-                placeholder="Ask a question..."
-                placeholderTextColor="#9CA3AF"
-                value={inputText}
-                onChangeText={setInputText}
-                multiline
-                maxLength={2000}
-                editable={!isSending && !!currentStatus?.hasSubscription}
-              />
-              <TouchableOpacity
-                className="bg-blue-500 w-12 h-12 rounded-full items-center justify-center"
-                onPress={handleSend}
-                disabled={
-                  isSending ||
-                  !inputText.trim() ||
-                  !currentStatus?.hasSubscription
-                }
-                activeOpacity={0.7}
-              >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="send" size={22} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+  {/* AI Preference (only shows when expanded) */}
+  {showPreference && (
+    <View className="bg-gray-100 rounded-full p-1 flex-row mb-2">
+      {(
+        [
+          { key: "short", label: "Quick ⚡" },
+          { key: "medium", label: "Balanced ⚖️" },
+          { key: "deep_search", label: "Deep 🔍" },
+        ] as const
+      ).map((opt) => {
+        const selected = aiPreference === opt.key;
+        return (
+          <TouchableOpacity
+            key={opt.key}
+            onPress={() => {
+              setAiPreference(opt.key);
+              setShowPreference(false); // auto hide
+            }}
+            activeOpacity={0.8}
+            className={`flex-1 py-2 rounded-full items-center justify-center ${
+              selected ? "bg-white" : ""
+            }`}
+          >
+            <Text
+              className={`text-xs ${
+                selected
+                  ? "text-blue-700 font-semibold"
+                  : "text-gray-700"
+              }`}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  )}
+
+  {/* Input Row */}
+  <View className="flex-row items-end gap-2">
+    {/* ➕ Button (only when hidden) */}
+    {!showPreference && (
+      <TouchableOpacity
+        onPress={() => setShowPreference(true)}
+        className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center"
+      >
+        <Ionicons name="add" size={20} color="#374151" />
+      </TouchableOpacity>
+    )}
+
+    <TextInput
+      className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-gray-900 font-outfit-regular max-h-24"
+      style={{
+        fontSize: scaleFont(15),
+        lineHeight: scaleLineHeight(scaleFont(15), 1.4),
+      }}
+      placeholder="Ask a question..."
+      placeholderTextColor="#9CA3AF"
+      value={inputText}
+      onChangeText={setInputText}
+      multiline
+      maxLength={2000}
+      editable={!isSending && !!currentStatus?.hasSubscription}
+    />
+
+    <TouchableOpacity
+      className="bg-blue-500 w-12 h-12 rounded-full items-center justify-center"
+      onPress={handleSend}
+      disabled={
+        isSending ||
+        !inputText.trim() ||
+        !currentStatus?.hasSubscription
+      }
+      activeOpacity={0.7}
+    >
+      {isSending ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Ionicons name="send" size={22} color="#FFFFFF" />
+      )}
+    </TouchableOpacity>
+  </View>
+</View>
         </View>
       </KeyboardAvoidingView>
 

@@ -33,9 +33,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   debounceMs = 300,
   inputRef,
 }) => {
+  const MIN_INPUT_HEIGHT = 40;
+  const MAX_INPUT_HEIGHT = 180;
+
   const [showDropdown, setShowDropdown] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(value);
   const [isSelectingSuggestion, setIsSelectingSuggestion] = useState(false);
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const { search } = useServices();
 
   // Debounce the query for suggestions - only update if value actually changed
@@ -133,6 +137,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
+  const clamp = (n: number, min: number, max: number) =>
+    Math.max(min, Math.min(max, n));
+
   return (
     <View className="relative">
       <View className="bg-gray-100 rounded-3xl flex-row items-center px-4 py-3">
@@ -152,11 +159,52 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               setShowDropdown(false);
             }
           }}
-          onSubmitEditing={onSearch}
+          multiline={true}
+          textAlignVertical="top"
+          onContentSizeChange={(e) => {
+            const nextHeight = clamp(
+              Math.ceil(e.nativeEvent.contentSize.height),
+              MIN_INPUT_HEIGHT,
+              MAX_INPUT_HEIGHT
+            );
+            setInputHeight(nextHeight);
+          }}
+          scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
+          onKeyPress={(e) => {
+            // On native, rely on onSubmitEditing for consistent "Enter to search".
+            // On web, enable Shift+Enter for newline (optional requirement).
+            if (Platform.OS !== "web") return;
+
+            const key = (e.nativeEvent as any)?.key;
+            const shiftKey = (e.nativeEvent as any)?.shiftKey;
+            if (key !== "Enter") return;
+
+            if (shiftKey) {
+              onChangeText(`${value}\n`);
+              return;
+            }
+
+            if (onSearch && value.trim().length > 0) {
+              onSearch();
+            }
+          }}
+          onSubmitEditing={() => {
+            if (onSearch && value.trim().length > 0) {
+              onSearch();
+            }
+          }}
           onFocus={handleFocus}
           onBlur={handleBlur}
           returnKeyType="search"
-          blurOnSubmit={false}
+          blurOnSubmit={true}
+          style={[
+            {
+              minHeight: MIN_INPUT_HEIGHT,
+              height: inputHeight,
+              maxHeight: MAX_INPUT_HEIGHT,
+            },
+            Platform.OS === "web" ? ({ resize: "none" } as any) : null,
+          ]}
         />
         {isLoadingSuggestions && showDropdown && (
           <ActivityIndicator size="small" color="#3B82F6" />

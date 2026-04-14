@@ -901,6 +901,7 @@ export default function Search() {
             {/* Vault Answer */}
             <View className="bg-gray-50 rounded-2xl p-5 mb-4">
               <Text
+                selectable={true}
                 className="text-gray-900 font-outfit-regular"
                 style={{
                   fontSize: scaleFont(18),
@@ -969,6 +970,7 @@ export default function Search() {
                         className="bg-white border border-gray-200 rounded-xl p-4 mb-3"
                       >
                         <Text
+                          selectable={true}
                           className="text-gray-900 font-outfit-regular mb-3"
                           style={{
                             fontSize: scaleFont(16),
@@ -1137,6 +1139,7 @@ export default function Search() {
         {searchResult && !isLoading && !displayResult && (
           <View className="mt-4 bg-gray-50 rounded-2xl p-5">
             <Text
+              selectable={true}
               className="text-gray-900 font-outfit-regular"
               style={{
                 fontSize: scaleFont(18),

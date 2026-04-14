@@ -8,7 +8,7 @@
  * 2. Create a development build: npx expo prebuild && npx expo run:android (or run:ios)
  * 3. For production, replace test ad unit IDs with your production ad unit IDs
  */
-/*
+
 export interface AdConfig {
   adUnitId: string;
   isRewarded: boolean; // true for rewarded (skipable), false for interstitial (non-skipable)
@@ -246,19 +246,19 @@ class AdMobAdManager {
 }
 
 export const adMobAdManager = new AdMobAdManager();
-*/
+
 // Stub so imports don't break if re-enabled elsewhere
-export interface AdConfig {
-  adUnitId: string;
-  isRewarded: boolean;
-}
-export interface AdResult {
-  success: boolean;
-  revenue?: number;
-  error?: string;
-}
-export const adMobAdManager = {
-  initialize: async () => {},
-  showRewardedAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
-  showInterstitialAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
-};
+// export interface AdConfig {
+//   adUnitId: string;
+//   isRewarded: boolean;
+// }
+// export interface AdResult {
+//   success: boolean;
+//   revenue?: number;
+//   error?: string;
+// }
+// export const adMobAdManager = {
+//   initialize: async () => {},
+//   showRewardedAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+//   showInterstitialAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+// };

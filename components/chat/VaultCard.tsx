@@ -193,6 +193,7 @@ export function VaultCard({
 
       {/* Content */}
       <Text
+        selectable={true}
         className="text-gray-900 font-outfit-regular"
         style={{
           fontSize: scaleFont(15),

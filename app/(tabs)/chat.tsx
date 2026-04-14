@@ -817,7 +817,10 @@ export default function Chat() {
                       </View>
                     ) : (
                       <View className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3">
-                        <Text className="text-gray-900 text-[15px] leading-[20px]">
+                        <Text
+                          selectable={true}
+                          className="text-gray-900 text-[15px] leading-[20px]"
+                        >
                           {msg.content}
                         </Text>
                       </View>
@@ -885,89 +888,89 @@ export default function Chat() {
           </ScrollView>
 
           <View className="px-4 py-3 border-t border-gray-200 bg-white">
-  {/* AI Preference (only shows when expanded) */}
-  {showPreference && (
-    <View className="bg-gray-100 rounded-full p-1 flex-row mb-2">
-      {(
-        [
-          { key: "short", label: "Quick ⚡" },
-          { key: "medium", label: "Balanced ⚖️" },
-          { key: "deep_search", label: "Deep 🔍" },
-        ] as const
-      ).map((opt) => {
-        const selected = aiPreference === opt.key;
-        return (
-          <TouchableOpacity
-            key={opt.key}
-            onPress={() => {
-              setAiPreference(opt.key);
-              setShowPreference(false); // auto hide
-            }}
-            activeOpacity={0.8}
-            className={`flex-1 py-2 rounded-full items-center justify-center ${
-              selected ? "bg-white" : ""
-            }`}
-          >
-            <Text
-              className={`text-xs ${
-                selected
-                  ? "text-blue-700 font-semibold"
-                  : "text-gray-700"
-              }`}
-            >
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  )}
+            {/* AI Preference (only shows when expanded) */}
+            {showPreference && (
+              <View className="bg-gray-100 rounded-full p-1 flex-row mb-2">
+                {(
+                  [
+                    { key: "short", label: "Quick ⚡" },
+                    { key: "medium", label: "Balanced ⚖️" },
+                    { key: "deep_search", label: "Deep 🔍" },
+                  ] as const
+                ).map((opt) => {
+                  const selected = aiPreference === opt.key;
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => {
+                        setAiPreference(opt.key);
+                        setShowPreference(false); // auto hide
+                      }}
+                      activeOpacity={0.8}
+                      className={`flex-1 py-2 rounded-full items-center justify-center ${
+                        selected ? "bg-white" : ""
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs ${
+                          selected
+                            ? "text-blue-700 font-semibold"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
 
-  {/* Input Row */}
-  <View className="flex-row items-end gap-2">
-    {/* ➕ Button (only when hidden) */}
-    {!showPreference && (
-      <TouchableOpacity
-        onPress={() => setShowPreference(true)}
-        className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center"
-      >
-        <Ionicons name="add" size={20} color="#374151" />
-      </TouchableOpacity>
-    )}
+            {/* Input Row */}
+            <View className="flex-row items-end gap-2">
+              {/* ➕ Button (only when hidden) */}
+              {!showPreference && (
+                <TouchableOpacity
+                  onPress={() => setShowPreference(true)}
+                  className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center"
+                >
+                  <Ionicons name="add" size={20} color="#374151" />
+                </TouchableOpacity>
+              )}
 
-    <TextInput
-      className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-gray-900 font-outfit-regular max-h-24"
-      style={{
-        fontSize: scaleFont(15),
-        lineHeight: scaleLineHeight(scaleFont(15), 1.4),
-      }}
-      placeholder="Ask a question..."
-      placeholderTextColor="#9CA3AF"
-      value={inputText}
-      onChangeText={setInputText}
-      multiline
-      maxLength={2000}
-      editable={!isSending && !!currentStatus?.hasSubscription}
-    />
+              <TextInput
+                className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-gray-900 font-outfit-regular max-h-24"
+                style={{
+                  fontSize: scaleFont(15),
+                  lineHeight: scaleLineHeight(scaleFont(15), 1.4),
+                }}
+                placeholder="Ask a question..."
+                placeholderTextColor="#9CA3AF"
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                maxLength={2000}
+                editable={!isSending && !!currentStatus?.hasSubscription}
+              />
 
-    <TouchableOpacity
-      className="bg-blue-500 w-12 h-12 rounded-full items-center justify-center"
-      onPress={handleSend}
-      disabled={
-        isSending ||
-        !inputText.trim() ||
-        !currentStatus?.hasSubscription
-      }
-      activeOpacity={0.7}
-    >
-      {isSending ? (
-        <ActivityIndicator size="small" color="#FFFFFF" />
-      ) : (
-        <Ionicons name="send" size={22} color="#FFFFFF" />
-      )}
-    </TouchableOpacity>
-  </View>
-</View>
+              <TouchableOpacity
+                className="bg-blue-500 w-12 h-12 rounded-full items-center justify-center"
+                onPress={handleSend}
+                disabled={
+                  isSending ||
+                  !inputText.trim() ||
+                  !currentStatus?.hasSubscription
+                }
+                activeOpacity={0.7}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="send" size={22} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </KeyboardAvoidingView>
 

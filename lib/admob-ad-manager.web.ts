@@ -4,7 +4,7 @@
  * On web, AdMob native module is not available. This stub provides the same
  * interface but skips ads and returns mock success so search flow still works.
  */
-/*
+
 export interface AdConfig {
   adUnitId: string;
   isRewarded: boolean;
@@ -39,19 +39,19 @@ class AdMobAdManagerWeb {
 }
 
 export const adMobAdManager = new AdMobAdManagerWeb();
-*/
-// Stub so imports don't break if re-enabled elsewhere
-export interface AdConfig {
-  adUnitId: string;
-  isRewarded: boolean;
-}
-export interface AdResult {
-  success: boolean;
-  revenue?: number;
-  error?: string;
-}
-export const adMobAdManager = {
-  initialize: async () => {},
-  showRewardedAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
-  showInterstitialAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
-};
+
+// // Stub so imports don't break if re-enabled elsewhere
+// export interface AdConfig {
+//   adUnitId: string;
+//   isRewarded: boolean;
+// }
+// export interface AdResult {
+//   success: boolean;
+//   revenue?: number;
+//   error?: string;
+// }
+// export const adMobAdManager = {
+//   initialize: async () => {},
+//   showRewardedAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+//   showInterstitialAd: async (_config?: AdConfig): Promise<AdResult> => ({ success: true }),
+// };

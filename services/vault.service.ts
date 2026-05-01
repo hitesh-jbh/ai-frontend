@@ -15,11 +15,15 @@ export interface UpdateVaultRequest {
 
 export interface Vault {
   id: string;
-  userId: string;
   title: string;
   description?: string;
+
+  // ✅ ADD THESE
+  summary?: string;
+  email?: string;
+  phone?: string;
+
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface ApiResponse<T> {

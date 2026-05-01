@@ -15,6 +15,20 @@ import { showErrorToast, showSuccessToast } from "../../utils/toast";
 const editVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(1000).optional(),
+
+  summary: z.string().max(1000).optional(),
+
+  email: z
+    .string()
+    .regex(/^[a-zA-Z0-9._%+-]+@gmail\.com$/, "Enter valid Gmail")
+    .optional()
+    .or(z.literal("")),
+
+  phone: z
+    .string()
+    .regex(/^[0-9]{10}$/, "Phone must be 10 digits")
+    .optional()
+    .or(z.literal("")),
 });
 
 type EditVaultForm = z.infer<typeof editVaultSchema>;
@@ -37,9 +51,13 @@ export default function EditVault() {
     reset,
   } = useForm<EditVaultForm>({
     resolver: zodResolver(editVaultSchema),
+    mode: "onChange",
     defaultValues: {
-      title: vaultData?.title || "",
-      description: vaultData?.description || "",
+      title: "",
+      description: "",
+      summary: "",
+      email: "",
+      phone: "",
     },
   });
 
@@ -48,6 +66,9 @@ export default function EditVault() {
       reset({
         title: vaultData.title,
         description: vaultData.description || "",
+        summary: vaultData?.summary || "",
+        email: vaultData?.email || "",
+        phone: vaultData?.phone || "",
       });
     }
   }, [vaultData, reset]);

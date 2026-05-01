@@ -47,7 +47,7 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
-            "minSdkVersion": 24
+            "minSdkVersion": 26
           }
         }
       ],
@@ -57,18 +57,19 @@
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "owner": "hitesh-jbh",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "3ed8c6b0-2d46-4f87-acc7-85e8677184f5"
+        "projectId": "f89be706-92fe-47ab-803e-36170a41acc4"
       }
-    },
-    "owner": "hitesh-app"
+    }
   }
 }

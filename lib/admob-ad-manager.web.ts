@@ -27,14 +27,14 @@ class AdMobAdManagerWeb {
 
   async showRewardedAd(_config?: AdConfig): Promise<AdResult> {
     if (!this.isInitialized) await this.initialize();
-    const mockRevenue = 0.01 + Math.random() * 0.04;
-    return { success: true, revenue: mockRevenue };
+    // Web does not support the native AdMob SDK. Do not block user flows.
+    return { success: true, revenue: 0 };
   }
 
   async showInterstitialAd(_config?: AdConfig): Promise<AdResult> {
     if (!this.isInitialized) await this.initialize();
-    const mockRevenue = 0.02 + Math.random() * 0.08;
-    return { success: true, revenue: mockRevenue };
+    // Web does not support the native AdMob SDK. Do not block user flows.
+    return { success: true, revenue: 0 };
   }
 }
 

@@ -5,6 +5,8 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  useWindowDimensions,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -173,6 +175,9 @@ export default function Leaderboard() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
   const { user } = useAuthStore();
   const { leaderboard } = useServices();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 380;
+  const contentPaddingX = isNarrow ? 16 : 24;
 
   // Fetch user rank
   const { data: userRankData } = useQuery({
@@ -242,6 +247,11 @@ export default function Leaderboard() {
     );
   };
 
+  const topCardWidth = Math.max(
+    108,
+    Math.floor((width - contentPaddingX * 2 - 8 * 2) / 3)
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <ScreenHeader
@@ -259,7 +269,12 @@ export default function Leaderboard() {
         ListHeaderComponent={
           <View className="pb-3">
             {/* Period Tabs */}
-            <View className="flex-row gap-2 mb-6">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingRight: 8 }}
+              className="mb-6"
+            >
               {periods.map((period) => (
                 <TabButton
                   key={period.key}
@@ -268,7 +283,7 @@ export default function Leaderboard() {
                   onPress={() => handlePeriodChange(period.key)}
                 />
               ))}
-            </View>
+            </ScrollView>
 
             {/* Your Rank Section */}
             {userRankData?.entry && (
@@ -280,8 +295,14 @@ export default function Leaderboard() {
                   Here's where you stand in the competition
                 </Text>
 
-                <View className="flex-row gap-3 mb-4">
-                  <View className="flex-1 bg-white/20 rounded-lg p-4">
+                <View className="flex-row flex-wrap gap-3 mb-4">
+                  <View
+                    className="bg-white/20 rounded-lg p-4"
+                    style={{
+                      flexGrow: 1,
+                      flexBasis: isNarrow ? "48%" : "30%",
+                    }}
+                  >
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       #{userRankData.entry.rank}
                     </Text>
@@ -289,7 +310,13 @@ export default function Leaderboard() {
                       Out of {userRankData.totalUsers} users
                     </Text>
                   </View>
-                  <View className="flex-1 bg-white/20 rounded-lg p-4">
+                  <View
+                    className="bg-white/20 rounded-lg p-4"
+                    style={{
+                      flexGrow: 1,
+                      flexBasis: isNarrow ? "48%" : "30%",
+                    }}
+                  >
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       {userRankData.entry.score}
                     </Text>
@@ -297,7 +324,13 @@ export default function Leaderboard() {
                       Coins earned
                     </Text>
                   </View>
-                  <View className="flex-1 bg-white/20 rounded-lg p-4">
+                  <View
+                    className="bg-white/20 rounded-lg p-4"
+                    style={{
+                      flexGrow: 1,
+                      flexBasis: isNarrow ? "48%" : "30%",
+                    }}
+                  >
                     <Text className="text-white text-2xl font-outfit-bold mb-1">
                       #{Math.max(1, userRankData.entry.rank - 1)}
                     </Text>
@@ -332,11 +365,12 @@ export default function Leaderboard() {
               ) : topThree.length > 0 ? (
                 <View className="flex-row justify-between">
                   {topThree.map((entry, index) => (
-                    <TopContributorCard
+                    <View
                       key={entry.userId}
-                      entry={entry}
-                      rank={index + 1}
-                    />
+                      style={{ width: topCardWidth }}
+                    >
+                      <TopContributorCard entry={entry} rank={index + 1} />
+                    </View>
                   ))}
                 </View>
               ) : (
@@ -370,7 +404,7 @@ export default function Leaderboard() {
           }
         }}
         onEndReachedThreshold={0.5}
-        contentContainerClassName="px-6 pb-6"
+        contentContainerStyle={{ paddingHorizontal: contentPaddingX, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>

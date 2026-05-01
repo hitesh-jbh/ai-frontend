@@ -23,6 +23,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { VaultCard } from "../../components/chat/VaultCard";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
+import { adMobAdManager } from "../../lib/admob-ad-manager";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThreadListItem } from "../../services/thread.service";
 import { useAuthStore } from "../../store/auth-store";
 import { useSubscriptionStore } from "../../store/subscription-store";
@@ -106,13 +108,14 @@ export default function Chat() {
   const [showPreferenceMenu, setShowPreferenceMenu] = useState(false);
 
   const services = useServices();
-  const { search, subscription, thread, vault, resource } = services;
+  const { search, subscription, thread, vault, resource, searchAdRevenue } =
+    services;
   const queryClient = useQueryClient();
   const { setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
 
-  // Ad revenue tracking (keep commented if needed)
-  // const searchAdRevenue = (services as { searchAdRevenue?: { trackAdRevenue: (opts: any) => Promise<void> } }).searchAdRevenue;
+  const lastUserQueryRef = useRef<string>("");
+  const lastChatAdEventKeyRef = useRef<string | null>(null);
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
@@ -196,6 +199,41 @@ export default function Chat() {
     }
   }, [currentStatus, setSubscriptionStatus]);
 
+  // SIMPLE ADS (chat): only after assistant message is visible.
+  useEffect(() => {
+    if (!threadId) return;
+    if (!messages || messages.length === 0) return;
+
+    const lastIndex = messages.length - 1;
+    const last = messages[lastIndex];
+    if (!last || last.role !== "assistant") return;
+
+    const eventKey = last.answerId ?? `${threadId}|${lastIndex}`;
+    if (lastChatAdEventKeyRef.current === eventKey) return;
+    lastChatAdEventKeyRef.current = eventKey;
+
+    // Fail-safe: do not block UI or delay the response.
+    void (async () => {
+      try {
+        const STORAGE_KEY = "chatCount_v1";
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const prev = raw ? Number.parseInt(raw, 10) : 0;
+        const next = Number.isFinite(prev) ? prev + 1 : 1;
+        await AsyncStorage.setItem(STORAGE_KEY, String(next));
+
+        const isPaidUser = currentStatus?.hasSubscription === true;
+        const shouldShowForFree = !isPaidUser && next === 1;
+        const shouldShowForPaid = isPaidUser && next % 3 === 0;
+
+        if (!shouldShowForFree && !shouldShowForPaid) return;
+
+        await adMobAdManager.showInterstitialAd();
+      } catch (e) {
+        console.error("[ChatAds] failed (UI not blocked):", e);
+      }
+    })();
+  }, [messages, threadId, currentStatus?.hasSubscription]);
+
   useEffect(() => {
     if (!currentStatus) return;
     const sub = currentStatus.subscription;
@@ -277,6 +315,7 @@ export default function Chat() {
     }
 
     setInputText("");
+    lastUserQueryRef.current = trimmed;
     const userMessage: ChatMessage = { role: "user", content: trimmed };
     setMessages((prev) => [...prev, userMessage]);
     setIsSending(true);

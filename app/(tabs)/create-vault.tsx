@@ -19,13 +19,14 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { useServices } from "../../hooks/useServices";
 import { showErrorToast, showSuccessToast } from "../../utils/toast";
 import { useAuthStore } from "../../store/auth-store";
+import { gmailSchema, phoneSchema } from "../../lib/validations/auth.schema";
 
 const createVaultSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   description: z.string().max(1000).optional(),
   summary: z.string().max(500).optional(),
-  phone: z.string().min(1, "Phone is required").max(20),
-  email: z.string().email("Invalid email address"),
+  phone: phoneSchema,
+  email: gmailSchema,
 });
 
 type CreateVaultForm = z.infer<typeof createVaultSchema>;

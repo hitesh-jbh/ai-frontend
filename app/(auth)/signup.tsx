@@ -9,7 +9,6 @@ import { useMutation } from "@tanstack/react-query";
 import { ControlledInput } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Checkbox } from "../../components/ui/Checkbox";
-import { Link } from "../../components/ui/Link";
 import { authService } from "../../services/auth.service";
 import { useAuthStore } from "../../store/auth-store";
 import {
@@ -26,18 +25,18 @@ const Signup = () => {
 
   const login = useAuthStore((state) => state.login);
 
-  const { control, handleSubmit, watch } = useForm<SignupFormData>({
+  const { control, handleSubmit } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       email: "",
+      phone: "",
       password: "",
       confirmPassword: "",
       acceptTerms: false,
     },
   });
-
-  const acceptTerms = watch("acceptTerms");
 
   const registerMutation = useMutation({
     mutationFn: authService.register,
@@ -50,7 +49,7 @@ const Signup = () => {
           data.accessToken,
           data.refreshToken
         );
-      } catch (error) {
+      } catch {
         // If profile fetch fails, use user data from registration
         login(data.user, data.accessToken, data.refreshToken);
       }
@@ -81,6 +80,7 @@ const Signup = () => {
     registerMutation.mutate({
       name: data.name,
       email: data.email,
+      phone: data.phone,
       password: data.password,
     });
   };
@@ -125,6 +125,16 @@ const Signup = () => {
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+          />
+
+          <ControlledInput
+            name="phone"
+            control={control}
+            label="Phone *"
+            placeholder="Enter 10-digit phone number"
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+            autoComplete="tel"
           />
 
           <ControlledInput
@@ -176,7 +186,7 @@ const Signup = () => {
               control={control}
               name="acceptTerms"
               render={({
-                field: { onChange, value },
+                field: { onChange, value }, 
                 fieldState: { error },
               }) => (
                 <>

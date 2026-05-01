@@ -20,6 +20,8 @@ import { VaultCard } from "../../components/chat/VaultCard";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { SearchBar } from "../../components/ui/SearchBar";
 import { useServices } from "../../hooks/useServices";
+import { adMobAdManager } from "../../lib/admob-ad-manager";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SearchResult, ThreadListItem } from "../../services/search.service";
 import { useAuthStore } from "../../store/auth-store";
 import { useSubscriptionStore } from "../../store/subscription-store";
@@ -30,12 +32,6 @@ import {
   showSuccessToast,
 } from "../../utils/toast";
 import * as DocumentPicker from "expo-document-picker";
-
-interface PendingAdTracking {
-  query: string;
-  adType: "rewarded" | "interstitial";
-  revenue: number;
-}
 
 export default function Search() {
   const pickFile = async () => {
@@ -64,8 +60,6 @@ export default function Search() {
   );
   const [resourceValue, setResourceValue] = useState("");
   const [isShowingAd, setIsShowingAd] = useState(false);
-  const [pendingAdTracking, setPendingAdTracking] =
-    useState<PendingAdTracking | null>(null);
   const [isUpvoted, setIsUpvoted] = useState<boolean>(false);
   const [showResourcesModal, setShowResourcesModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -82,8 +76,7 @@ export default function Search() {
   const [savePending, setSavePending] = useState(false);
 
   const services = useServices();
-  const { search, subscription, searchAdRevenue, vault, resource, thread } =
-    services;
+  const { search, subscription, vault, resource, thread } = services;
   const queryClient = useQueryClient();
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
@@ -211,7 +204,6 @@ export default function Search() {
       try {
         const res = await search.createThread();
         setThreadId(res.threadId);
-
         setSearchTrigger(trimmedQuery);
       } catch (err) {
         console.log("Thread creation failed:", err);
@@ -312,6 +304,42 @@ export default function Search() {
     return result;
   }, [searchResult, sortedVaultContributions]);
 
+  const lastSearchAdEventKeyRef = useRef<string | null>(null);
+
+  // SIMPLE ADS (post-result): never show ads before search; only after result is visible.
+  useEffect(() => {
+    if (!searchResult) return;
+
+    const eventKey = searchResult.answerId ?? activeQuery ?? null;
+    if (!eventKey) return;
+
+    // Avoid multiple ads for the same result (refetches, re-renders).
+    if (lastSearchAdEventKeyRef.current === eventKey) return;
+    lastSearchAdEventKeyRef.current = eventKey;
+
+    // Fail-safe: don't block UI or delay the result rendering.
+    void (async () => {
+      try {
+        const STORAGE_KEY = "searchCount_v1";
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const prev = raw ? Number.parseInt(raw, 10) : 0;
+        const next = Number.isFinite(prev) ? prev + 1 : 1;
+        await AsyncStorage.setItem(STORAGE_KEY, String(next));
+
+        const isPaidUser = currentStatus?.hasSubscription === true;
+        const shouldShowForFree = !isPaidUser && next === 1;
+        const shouldShowForPaid = isPaidUser && next % 3 === 0;
+
+        if (!shouldShowForFree && !shouldShowForPaid) return;
+
+        await adMobAdManager.showInterstitialAd();
+      } catch (e) {
+        // UX rule: never block UI if ad/counter fails.
+        console.error("[SearchAds] failed (UI not blocked):", e);
+      }
+    })();
+  }, [searchResult, activeQuery, currentStatus?.hasSubscription]);
+
   // Safety: if we already have a result, never keep the UI stuck behind the ad/loading gate.
   useEffect(() => {
     if (searchResult && isShowingAd) setIsShowingAd(false);
@@ -349,22 +377,6 @@ export default function Search() {
       });
     }
   }, [searchResult, queryClient, user?.id]);
-
-  // Track ad revenue
-  useEffect(() => {
-    if (searchResult && pendingAdTracking && searchAdRevenue) {
-      searchAdRevenue
-        .trackAdRevenue({
-          query: pendingAdTracking.query,
-          searchResultSource: searchResult.source,
-          answerId: searchResult.answerId,
-          adType: pendingAdTracking.adType,
-          revenue: pendingAdTracking.revenue,
-        })
-        .catch(() => {});
-      setPendingAdTracking(null);
-    }
-  }, [searchResult, pendingAdTracking, searchAdRevenue]);
 
   // Handle search errors
   useEffect(() => {
@@ -519,35 +531,8 @@ export default function Search() {
 
     setSearchQuery(trimmedQuery);
 
-    const isFreePlan = currentStatus.subscription?.plan === "free";
-
-    if (!isFreePlan) {
-      setSearchTrigger(trimmedQuery);
-      return;
-    }
-
-    setIsShowingAd(true);
-
-    try {
-      const { adMobAdManager } = await import("../../lib/admob-ad-manager");
-      const adResult = await adMobAdManager.showInterstitialAd();
-
-      setIsShowingAd(false);
-
-      if (adResult.success && adResult.revenue != null) {
-        setPendingAdTracking({
-          query: trimmedQuery,
-          adType: "interstitial",
-          revenue: adResult.revenue,
-        });
-      }
-
-      setSearchTrigger(trimmedQuery);
-    } catch (error) {
-      console.error("Error showing ad:", error);
-      setIsShowingAd(false);
-      setSearchTrigger(trimmedQuery);
-    }
+    // Never show ads before search. Search first; smart ads may show after results.
+    setSearchTrigger(trimmedQuery);
   };
 
   const getSourceBorderColor = (source: string) => {
@@ -1760,7 +1745,13 @@ export default function Search() {
                           : "bg-gray-50"
                       }`}
                       onPress={() => {
-                        setThreadId(thread.id);
+                        console.log("Thread clicked:", thread.id);
+
+                        router.push({
+                          pathname: "/(tabs)/chat",
+                          params: { threadId: thread.id },
+                        });
+
                         setShowThreadsModal(false);
                       }}
                       activeOpacity={0.7}

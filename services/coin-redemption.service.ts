@@ -39,4 +39,3 @@ export const createCoinRedemptionService = (axiosInstance: AxiosInstance) => ({
     return response.data.data;
   },
 });
-

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Connect",
+    "name": "KnowVaults",
     "slug": "connect-knowledge-vault",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -58,7 +58,8 @@
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

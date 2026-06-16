@@ -1,28 +1,28 @@
-import React, { useState, useEffect } from "react";
+import { ResponsiveText } from "@/utils/responsive-text";
+import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
   ScrollView,
+  Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  View,
 } from "react-native";
-import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
-import { StatCard } from "../../components/ui/StatCard";
-import { TrendingBanner } from "../../components/home/TrendingBanner";
 import { AnalyticsChart } from "../../components/home/AnalyticsChart";
 import { TopEarners } from "../../components/home/TopEarners";
+import { TrendingBanner } from "../../components/home/TrendingBanner";
+import { StatCard } from "../../components/ui/StatCard";
 import { useServices } from "../../hooks/useServices";
-import { useAuthStore } from "../../store/auth-store";
-import { Ionicons } from "@expo/vector-icons";
-import { normalizeImageUrl } from "../../utils/imageUrl";
-import { ResponsiveText } from "@/utils/responsive-text";
 import {
-  formatStatValue,
   formatPaidValue,
+  formatStatValue,
 } from "../../services/platform-stats.service";
+import { useAuthStore } from "../../store/auth-store";
+import { normalizeImageUrl } from "../../utils/imageUrl";
 
 export default function Home() {
   const [profileImageError, setProfileImageError] = useState(false);
@@ -78,7 +78,7 @@ export default function Home() {
             <Text
               className={`text-gray-900 ${ResponsiveText.display} font-outfit-bold mb-1`}
             >
-              Connect
+              KnowVaults
             </Text>
             <Text className="text-gray-600 text-base font-outfit-regular">
               Trusted by creators across the globe.

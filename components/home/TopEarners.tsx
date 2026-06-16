@@ -11,6 +11,44 @@ interface TopEarnersProps {
   isLoading?: boolean;
 }
 
+const EarnerRow: React.FC<{ earner: LeaderboardEntry }> = ({ earner }) => {
+  const [imageError, setImageError] = React.useState(false);
+  const normalizedProfilePicture = earner.profilePicture
+    ? normalizeImageUrl(earner.profilePicture)
+    : null;
+
+  return (
+    <View className="flex-row items-center justify-between bg-gray-100 rounded-2xl p-4">
+      <View className="flex-row items-center flex-1">
+        <View className="w-14 h-14 bg-gray-200 rounded-full items-center justify-center mr-3 overflow-hidden">
+          {normalizedProfilePicture && !imageError ? (
+            <Image
+              source={{ uri: normalizedProfilePicture }}
+              style={{ width: 42, height: 42, borderRadius: 20 }}
+              contentFit="cover"
+              transition={200}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <Ionicons name="person" size={20} color="#6B7280" />
+          )}
+        </View>
+        <View className="flex-1">
+          <Text className="text-gray-900 text-base font-outfit-semi-bold">
+            {earner.userName} #{earner.rank}
+          </Text>
+          <Text className="text-gray-600 text-sm font-outfit-regular">
+            Content Creator
+          </Text>
+        </View>
+      </View>
+      <Text className="text-gray-900 text-base font-outfit-semi-bold">
+        {earner.score} Coins
+      </Text>
+    </View>
+  );
+};
+
 export const TopEarners: React.FC<TopEarnersProps> = ({
   earners = [],
   isLoading = false,
@@ -57,46 +95,9 @@ export const TopEarners: React.FC<TopEarnersProps> = ({
         </View>
       ) : (
         <View className="gap-3">
-          {safeEarners.map((earner, index) => {
-            const [imageError, setImageError] = React.useState(false);
-            const normalizedProfilePicture = earner.profilePicture
-              ? normalizeImageUrl(earner.profilePicture)
-              : null;
-
-            return (
-              <View
-                key={earner.userId}
-                className="flex-row items-center justify-between bg-gray-100 rounded-2xl p-4"
-              >
-                <View className="flex-row items-center flex-1">
-                  <View className="w-14 h-14 bg-gray-200 rounded-full items-center justify-center mr-3 overflow-hidden">
-                    {normalizedProfilePicture && !imageError ? (
-                      <Image
-                        source={{ uri: normalizedProfilePicture }}
-                        style={{ width: 42, height: 42, borderRadius: 20 }}
-                        contentFit="cover"
-                        transition={200}
-                        onError={() => setImageError(true)}
-                      />
-                    ) : (
-                      <Ionicons name="person" size={20} color="#6B7280" />
-                    )}
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-gray-900 text-base font-outfit-semi-bold">
-                      {earner.userName} #{earner.rank}
-                    </Text>
-                    <Text className="text-gray-600 text-sm font-outfit-regular">
-                      Content Creator
-                    </Text>
-                  </View>
-                </View>
-                <Text className="text-gray-900 text-base font-outfit-semi-bold">
-                  {earner.score} Coins
-                </Text>
-              </View>
-            );
-          })}
+          {safeEarners.map((earner) => (
+            <EarnerRow key={earner.userId} earner={earner} />
+          ))}
         </View>
       )}
     </View>

@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.connect.knowledgevault"
+      "package": "com.connect.knowledgevault",
+      "versionCode": 9
     },
     "web": {
       "bundler": "metro",

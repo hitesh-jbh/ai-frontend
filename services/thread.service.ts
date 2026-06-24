@@ -8,6 +8,7 @@ export interface ThreadListItem {
 }
 
 export const createThreadService = (axiosInstance: AxiosInstance) => ({
+  
   createThread: async (): Promise<{ data: { threadId: string } }> => {
     const response = await axiosInstance.post("/threads/new");
     return response.data;
@@ -26,5 +27,9 @@ export const createThreadService = (axiosInstance: AxiosInstance) => ({
   getThreadById: async (threadId: string) => {
     const response = await axiosInstance.get(`/threads/${threadId}`);
     return response.data;
+  },
+
+  deleteThread: async (threadId: string): Promise<void> => {
+    await axiosInstance.delete(`/threads/${threadId}`);
   },
 });

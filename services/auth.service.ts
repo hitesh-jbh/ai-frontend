@@ -19,6 +19,12 @@ export interface ForgotPasswordRequest {
   email: string;
 }
 
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -127,6 +133,10 @@ export const authService = {
 
   async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
     await axiosInstance.post<ApiResponse<null>>("/auth/forgot-password", data);
+  },
+
+  async resetPassword(data: ResetPasswordRequest): Promise<void> {
+    await axiosInstance.post<ApiResponse<null>>("/auth/reset-password", data);
   },
 
   async logout(): Promise<void> {

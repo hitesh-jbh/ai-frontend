@@ -1,14 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TextInput,
   TouchableOpacity,
@@ -21,17 +25,16 @@ import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { SearchBar } from "../../components/ui/SearchBar";
 import { useServices } from "../../hooks/useServices";
 import { adMobAdManager } from "../../lib/admob-ad-manager";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SearchResult, ThreadListItem } from "../../services/search.service";
 import { useAuthStore } from "../../store/auth-store";
 import { useSubscriptionStore } from "../../store/subscription-store";
 import { scaleFont, scaleLineHeight } from "../../utils/font-scale";
+
 import {
   showErrorToast,
   showInfoToast,
   showSuccessToast,
 } from "../../utils/toast";
-import * as DocumentPicker from "expo-document-picker";
 
 export default function Search() {
   const pickFile = async () => {
@@ -81,7 +84,7 @@ export default function Search() {
   const { subscriptionStatus, setSubscriptionStatus } = useSubscriptionStore();
   const { user } = useAuthStore();
 
-  // Fetch subscription status on mount
+
   const { data: currentStatus, refetch: refetchSubscription } = useQuery({
     queryKey: ["subscriptionStatus", user?.id],
     queryFn: () => subscription.getCurrentStatus(),
@@ -89,6 +92,26 @@ export default function Search() {
     staleTime: 30000,
     retry: 1,
   });
+
+  const { data: searchHistory, refetch: refetchHistory } = useQuery({
+    queryKey: ["threads", user?.id],
+    queryFn: () => thread.getAllThreads(10, 0),
+    enabled: !!user?.id,
+    staleTime: 60000,
+  });
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        refetchHistory();
+      }
+
+      if (currentStatus?.canSearch && searchInputRef.current) {
+        const timer = setTimeout(() => searchInputRef.current?.focus(), 300);
+        return () => clearTimeout(timer);
+      }
+    }, [currentStatus?.canSearch, user?.id, refetchHistory]),
+  );
 
   // Update store when status is fetched
   useEffect(() => {
@@ -153,16 +176,6 @@ export default function Search() {
     }
   }, [currentStatus]);
 
-  // Auto-focus search input
-  useFocusEffect(
-    React.useCallback(() => {
-      if (currentStatus?.canSearch && searchInputRef.current) {
-        const timer = setTimeout(() => searchInputRef.current?.focus(), 300);
-        return () => clearTimeout(timer);
-      }
-    }, [currentStatus?.canSearch]),
-  );
-
   // Update search query when params change
   useEffect(() => {
     if (
@@ -205,12 +218,17 @@ export default function Search() {
         const res = await search.createThread();
         setThreadId(res.threadId);
         setSearchTrigger(trimmedQuery);
+
+        // BACKEND TRACKING FIX: Force React Query to pull the new thread instantly
+        queryClient.invalidateQueries({ queryKey: ["threads"] });
       } catch (err) {
         console.log("Thread creation failed:", err);
         return;
       }
     } else {
       setSearchTrigger(trimmedQuery);
+      // Refresh history even on existing threads to update titles/timestamps
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
     }
   };
 
@@ -235,14 +253,6 @@ export default function Search() {
       };
     }
   }, [activeQuery, threadId, currentStatus?.hasSubscription, search]);
-
-  // Fetch search history
-  const { data: searchHistory } = useQuery({
-    queryKey: ["threads", user?.id],
-    queryFn: () => thread.getAllThreads(10, 0),
-    enabled: !!user?.id,
-    staleTime: 60000,
-  });
 
   // Fetch search results
   const {
@@ -493,10 +503,32 @@ export default function Search() {
     },
   });
 
+  const deleteThreadMutation = useMutation({
+    mutationFn: (id: string) => thread.deleteThread(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
+      showSuccessToast("Deleted", "Search item removed successfully");
+    },
+    onError: (error: any) => {
+      showErrorToast("Error", error?.message || "Failed to delete item");
+    },
+  });
+
   // Reset upvote state when search result changes
   useEffect(() => {
     if (searchResult?.answerId) setIsUpvoted(false);
   }, [searchResult?.answerId]);
+
+  const handleShareAnswer = async (answerText: string) => {
+    try {
+      if (!answerText) return;
+      await Share.share({
+        message: `Check out this answer from KnowVaults:\n\n${answerText}`,
+      });
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
 
   const handleSuggestionSelect = (suggestion: string) => {
     const trimmed = suggestion.trim();
@@ -631,36 +663,54 @@ export default function Search() {
         showBackButton
         onBackPress={handleBackPress}
         rightElement={
-          <View className="flex-row items-center gap-3">
-            {/* Chat icon - navigates to Chat screen */}
-            <TouchableOpacity
-              onPress={() => router.push("/(tabs)/chat")}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chatbubble-outline" size={22} color="#3B82F6" />
-            </TouchableOpacity>
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const newThread = await thread.createThread();
 
-            {/* Time icon - opens search history modal */}
-            <TouchableOpacity
-              onPress={() => setShowHistoryModal(true)}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="time-outline" size={22} color="#3B82F6" />
-            </TouchableOpacity>
+                // 2. Clear out the search/UI states and save the fresh thread ID
+                setSearchTrigger(null);
+                setSearchQuery("");
+                setDebouncedQuery("");
 
-            {/* NEW: Threads icon - chatbubbles-outline (opens threads modal) */}
-            <TouchableOpacity
-              onPress={() => setShowThreadsModal(true)}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chatbubbles-outline" size={22} color="#3B82F6" />
-            </TouchableOpacity>
-          </View>
+                if (newThread && newThread.data.threadId) {
+                  setThreadId(newThread.data.threadId);
+                  showSuccessToast("Success", "New chat started");
+
+                  // Force React Query to clear cache and refresh lists immediately
+                  queryClient.invalidateQueries({ queryKey: ["threads"] });
+
+                  router.push({
+                    pathname: "/(tabs)/chat",
+                    params: { threadId: newThread.data.threadId },
+                  });
+                } else {
+                  setThreadId(null);
+                }
+              } catch (error) {
+                console.error("Failed to create a new chat thread:", error);
+                // Fallback reset in case backend call fails
+                setSearchTrigger(null);
+                setThreadId(null);
+                setSearchQuery("");
+                setDebouncedQuery("");
+              }
+            }}
+            className="bg-blue-50 border border-blue-200 rounded-full px-4 py-1.5 flex-row items-center gap-1.5"
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={16}
+              color="#3B82F6"
+            />
+            <Text className="text-blue-600 font-outfit-semi-bold text-sm">
+              New Chat
+            </Text>
+          </TouchableOpacity>
         }
       />
+
       <View className="px-6 pb-4 border-b border-gray-200">
         <View className="flex-row items-center gap-3 mt-2">
           <View className="flex-1">
@@ -793,6 +843,15 @@ export default function Search() {
                   {getSourceLabel(displayResult.source)}
                 </Text>
               </View>
+
+              {/* SHARE BUTTON */}
+              <TouchableOpacity
+                onPress={() => handleShareAnswer(displayResult.answer || "")}
+                className="w-8 h-8 rounded-full items-center justify-center bg-blue-50 border border-blue-100"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="share-social" size={16} color="#3B82F6" />
+              </TouchableOpacity>
 
               {vaultIdFromResult && (
                 <View className="flex-row items-center gap-3">
@@ -1522,7 +1581,10 @@ export default function Search() {
                               lineHeight: scaleLineHeight(scaleFont(14), 1.4),
                             }}
                           >
-                            {item.title}
+                            {/* FIXED: Handles both string titles and raw query object types */}
+                            {item.title && item.title.trim() !== ""
+                              ? item.title
+                              : (item as any).query || "Untitled Chat"}
                           </Text>
                           <View className="flex-row items-center mt-1">
                             {(item as any).total !== undefined &&
@@ -1551,11 +1613,39 @@ export default function Search() {
                             </Text>
                           </View>
                         </View>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={20}
-                          color="#9CA3AF"
-                        />
+                        <View className="flex-row items-center gap-2">
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              Alert.alert(
+                                "Delete Search",
+                                "Remove this item from your history?",
+                                [
+                                  { text: "Cancel", style: "cancel" },
+                                  {
+                                    text: "Delete",
+                                    style: "destructive",
+                                    onPress: () =>
+                                      deleteThreadMutation.mutate(item.id),
+                                  },
+                                ],
+                              );
+                            }}
+                            className="p-2"
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={18}
+                              color="#EF4444"
+                            />
+                          </TouchableOpacity>
+
+                          <Ionicons
+                            name="chevron-forward"
+                            size={20}
+                            color="#9CA3AF"
+                          />
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>

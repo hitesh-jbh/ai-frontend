@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -14,9 +14,6 @@ import { forgotPasswordSchema, type ForgotPasswordFormData } from "../../lib/val
 import { Ionicons } from "@expo/vector-icons";
 
 const ForgotPassword = () => {
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [submittedEmail, setSubmittedEmail] = useState("");
-
   const {
     control,
     handleSubmit,
@@ -32,8 +29,14 @@ const ForgotPassword = () => {
   const forgotPasswordMutation = useMutation({
     mutationFn: authService.forgotPassword,
     onSuccess: () => {
-      setSubmittedEmail(getValues("email"));
-      setIsSuccess(true);
+      // 1. Grab the current value from the email field
+      const emailEntered = getValues("email");
+      
+      // 2. Redirect to your newly created reset-password screen
+      router.push({
+        pathname: "/(auth)/reset-password",
+        params: { email: emailEntered }
+      });
     },
     onError: (error: any) => {
       const message = error?.response?.data?.message || "Failed to send reset link. Please try again.";
@@ -44,34 +47,6 @@ const ForgotPassword = () => {
   const onSubmit = (data: ForgotPasswordFormData) => {
     forgotPasswordMutation.mutate(data);
   };
-
-  if (isSuccess) {
-    return (
-      <SafeAreaView className="flex-1 bg-white">
-        <KeyboardAwareScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View className="px-6 py-4">
-            <View className="mb-8">
-              <Text className="text-gray-900 text-3xl font-outfit-bold mb-2">
-                Check your email
-              </Text>
-              <Text className="text-gray-600 text-base font-outfit-regular">
-                We've sent a password reset link to {submittedEmail}
-              </Text>
-            </View>
-
-            <Button
-              title="Back to Login"
-              onPress={() => router.push("/(auth)/login")}
-              className="mb-6"
-            />
-          </View>
-        </KeyboardAwareScrollView>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-white">

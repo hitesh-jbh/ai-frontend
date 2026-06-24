@@ -1,15 +1,20 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
-  View,
+  Alert,
+  Modal,
+  Share,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  Modal,
-  StyleSheet,
   TouchableWithoutFeedback,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useSearchPreferencesStore, SearchLayer } from "../../store/search-preferences-store";
 import { useAuthStore } from "../../store/auth-store";
+import {
+  SearchLayer,
+  useSearchPreferencesStore,
+} from "../../store/search-preferences-store";
 
 interface SearchLayerBottomSheetProps {
   visible: boolean;
@@ -69,6 +74,17 @@ export const SearchLayerBottomSheet: React.FC<SearchLayerBottomSheetProps> = ({
   const { preferredLayer, setPreferredLayer } = useSearchPreferencesStore();
   const { user } = useAuthStore();
 
+  const handleShareAnswer = async (answerText: string) => {
+    try {
+      // Just call the function directly without assigning it to a variable
+      await Share.share({
+        message: `Check out this answer from KnowVaults:\n\n${answerText}`,
+      });
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
+
   const handleSelectLayer = async (layer: SearchLayer) => {
     if (user?.id) {
       await setPreferredLayer(layer, user.id);
@@ -87,12 +103,30 @@ export const SearchLayerBottomSheet: React.FC<SearchLayerBottomSheetProps> = ({
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.container}>
-              {/* Header */}
+              {/* Header with Share Button Incorporated */}
               <View style={styles.header}>
                 <Text style={styles.title}>Search Preferences</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <Ionicons name="close" size={24} color="#6B7280" />
-                </TouchableOpacity>
+
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {/* Share Action Icon Trigger */}
+                  <TouchableOpacity
+                    onPress={() =>
+                      handleShareAnswer(
+                        `Current active layer preference: ${preferredLayer}`,
+                      )
+                    }
+                    style={[styles.closeButton, { marginRight: 12 }]}
+                  >
+                    <Ionicons name="share-social" size={22} color="#3B82F6" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={onClose}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons name="close" size={24} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Description */}
@@ -245,4 +279,3 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
 });
-
